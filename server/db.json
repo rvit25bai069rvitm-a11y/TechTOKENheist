@@ -1,0 +1,26 @@
+{
+  "gameState": {
+    "isGameActive": false,
+    "isPaused": false,
+    "status": "not_started",
+    "phase": "phase1",
+    "gameStartedAt": null,
+    "pausedAt": null,
+    "elapsedBeforePause": 0,
+    "domains": [
+      "Tech Pitch",
+      "Tech Quiz",
+      "Guess Output",
+      "Frontend Dev",
+      "Feature Addition"
+    ],
+    "timeoutDurationOverride": null
+  },
+  "teams": [],
+  "matchmakingQueue": [],
+  "activeMatches": [],
+  "matchHistory": [],
+  "notifications": [],
+  "tokenHistory": [],
+  "matchConstraints": {}
+}
