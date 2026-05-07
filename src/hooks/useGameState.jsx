@@ -25,6 +25,7 @@ const createInitialClientState = () => ({
 
 let countdownInterval = null
 let timerInterval = null
+let fallbackPollInterval = null
 
 const normalizeTeam = (team) => {
   const memberNames = team?.member_names || team?.memberNames || []
@@ -51,35 +52,44 @@ const normalizeQueueEntry = (entry) => ({
 })
 
 const upsertTeamRecord = async (teamData) => {
-  const { data: existing } = await supabase.from('teams').select('id').ilike('name', teamData.name).maybeSingle()
+  try {
+    const { data: existing } = await supabase.from('teams').select('id, name').ilike('name', teamData.name).limit(1).maybeSingle()
 
-  const payload = {
-    name: teamData.name,
-    member_names: teamData.memberNames || [teamData.name],
-    leader: teamData.leader || (teamData.memberNames?.[0]) || teamData.name,
-    password: teamData.password || 'password123',
-    tokens: teamData.tokens ?? 1,
-    status: teamData.status || 'idle'
-  }
-
-  if (existing?.id) {
-    const { error } = await supabase.from('teams').update(payload).eq('id', existing.id)
-    if (error) {
-      console.error('Update error:', error)
-      // Fallback update if columns are missing
-      await supabase.from('teams').update({ tokens: payload.tokens, status: payload.status }).eq('id', existing.id)
+    const payload = {
+      name: teamData.name,
+      member_names: teamData.memberNames || [teamData.name],
+      leader: teamData.leader || (teamData.memberNames?.[0]) || teamData.name,
+      password: teamData.password || 'password123',
+      tokens: teamData.tokens ?? 1,
+      status: teamData.status || 'idle'
     }
-    return existing.id
-  }
 
-  const { data: inserted, error: insertError } = await supabase.from('teams').insert([payload]).select().maybeSingle()
-  if (insertError) {
-    console.error('Insert error:', insertError)
-    // Fallback insert if columns are missing
-    const { data: fallback } = await supabase.from('teams').insert([{ name: payload.name, tokens: payload.tokens }]).select().maybeSingle()
-    return fallback?.id
+    if (existing?.id) {
+      const { error } = await supabase.from('teams').update(payload).eq('id', existing.id)
+      if (error) {
+        console.error('Update error:', error)
+        // Fallback update if some columns are missing
+        await supabase.from('teams').update({ tokens: payload.tokens, status: payload.status }).eq('id', existing.id)
+      }
+      return existing.id
+    }
+
+    const { data: inserted, error: insertError } = await supabase.from('teams').insert([payload]).select().maybeSingle()
+    if (insertError) {
+      console.error('Insert error:', insertError)
+      // Fallback insert if columns are missing
+      const { data: fallback, error: fallbackError } = await supabase.from('teams').insert([{ name: payload.name, tokens: payload.tokens }]).select().maybeSingle()
+      if (fallbackError) {
+        console.error('Fallback insert error:', fallbackError)
+        return null
+      }
+      return fallback?.id
+    }
+    return inserted?.id
+  } catch (err) {
+    console.error('upsertTeamRecord fatal error:', err)
+    return null
   }
-  return inserted?.id
 }
 
 const syncQueryCache = (snapshot) => {
@@ -245,8 +255,25 @@ const useGameStateStore = create((set, get) => ({
     await supabase.from('system').update({ phase: newPhase }).eq('key', 'game')
   },
   createTeam: async (teamData) => {
-    await upsertTeamRecord({ ...teamData, tokens: 1, status: 'idle' })
-    get().triggerFetchPublicState?.()
+    const teamId = await upsertTeamRecord({ ...teamData, tokens: 1, status: 'idle' })
+    
+    // PRD 4.2: If game is active, auto-enroll the new team immediately
+    const state = get()
+    if (teamId && state.gameState.isGameActive && !state.gameState.isPaused) {
+      try {
+        await supabase.from('matchmaking_queue').insert([{ 
+          team_id: teamId, 
+          team_name: teamData.name, 
+          team_tokens: 1 
+        }])
+      } catch (e) {
+        console.error('Failed to auto-enroll new team:', e)
+      }
+    }
+    
+    if (get().triggerFetchPublicState) {
+      await get().triggerFetchPublicState()
+    }
   },
   editTeam: async (teamData) => {
     await supabase.from('teams').update(teamData).eq('id', teamData.id)
@@ -508,7 +535,7 @@ const useGameSocketBridge = () => {
           { data: tokenHistory, error: tokErr }
         ] = await Promise.all([
           supabase.from('system').select('*'),
-          supabase.from('teams').select('*'),
+          supabase.from('teams').select('*').order('name', { ascending: true }),
           supabase.from('matchmaking_queue').select('*'),
           supabase.from('active_matches').select('*'),
           supabase.from('match_history').select('*'),
@@ -516,8 +543,23 @@ const useGameSocketBridge = () => {
           supabase.from('token_history').select('*')
         ]);
 
-        if (sysErr) console.error("System Error:", sysErr);
-        if (teamErr) console.error("Teams Error:", teamErr);
+        const queryErrors = [
+          ['system', sysErr],
+          ['teams', teamErr],
+          ['matchmaking_queue', queueErr],
+          ['active_matches', matchErr],
+          ['match_history', histErr],
+          ['notifications', notifErr],
+          ['token_history', tokErr],
+        ].filter(([, err]) => Boolean(err))
+
+        if (queryErrors.length > 0) {
+          console.group('Supabase public state fetch errors')
+          queryErrors.forEach(([tableName, err]) => {
+            console.error(`${tableName} error:`, err)
+          })
+          console.groupEnd()
+        }
 
         const system = (systemRows && systemRows[0]) || {}
 
@@ -597,10 +639,16 @@ const useGameSocketBridge = () => {
     })
     channel.subscribe()
 
+    // Fallback polling keeps UI synced even if realtime is not enabled in Supabase.
+    if (fallbackPollInterval) clearInterval(fallbackPollInterval)
+    fallbackPollInterval = setInterval(fetchPublicState, 5000)
+
     return () => {
       try {
         if (channel) channel.unsubscribe()
       } catch (e) { }
+      if (fallbackPollInterval) clearInterval(fallbackPollInterval)
+      fallbackPollInterval = null
       if (countdownInterval) clearInterval(countdownInterval)
       if (timerInterval) clearInterval(timerInterval)
     }

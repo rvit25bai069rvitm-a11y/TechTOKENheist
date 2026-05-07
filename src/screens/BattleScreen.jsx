@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useGameState } from '../hooks/useGameState';
-import { Target, ShieldAlert, Lock, Swords, Clock, Timer, VenetianMask } from 'lucide-react';
+import { Target, ShieldAlert, Lock, Swords, Clock, Timer, VenetianMask, Search } from 'lucide-react';
 import './AdminScreen.css';
 
 const MatchTimer = ({ startTime }) => {
