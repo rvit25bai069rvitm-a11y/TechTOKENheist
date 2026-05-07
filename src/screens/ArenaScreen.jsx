@@ -1,18 +1,19 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useGameState } from '../hooks/useGameState';
-import { Swords, ShieldAlert, Crosshair, Ban, Lock, Zap, Search, Timer } from 'lucide-react';
+import { Swords, Crosshair, Ban, Lock, Zap, Search, Timer, Skull, VenetianMask } from 'lucide-react';
 import { buildQueueDiagnostics } from '../utils/matchmaking';
+import './AdminScreen.css';
 
 const ArenaScreen = () => {
-  const { teams, activeMatches, myTeam, gameState, isInQueue, joinQueue, matchmakingQueue, matchConstraints } = useGameState();
+  const { teams, activeMatches, myTeam, gameState, isInQueue, myQueueEntry, joinQueue, matchmakingQueue, matchConstraints } = useGameState();
 
   if (!gameState.isGameActive && !gameState.isPaused) {
     return (
-      <div className="panel text-center" style={{ padding: '64px' }}>
-        <Lock size={48} className="text-warning mb-4" style={{ opacity: 0.6, margin: '0 auto' }} />
-        <h2 className="text-warning mb-4">ARENA LOCKED</h2>
-        <p className="text-muted">Awaiting admin authorization to commence.</p>
+      <div className="panel-container border-2 border-gray-600 p-12 text-center relative z-10 heist-bg">
+        <Lock size={64} className="text-gray-500 mb-6 mx-auto" />
+        <h2 className="heist-font text-heist-yellow text-4xl mb-2 tracking-widest">ARENA LOCKED</h2>
+        <p className="heist-mono text-gray-400 text-lg">Awaiting The Professor's authorization to commence.</p>
       </div>
     );
   }
@@ -66,183 +67,200 @@ const ArenaScreen = () => {
     [teams]
   );
 
+  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } };
+
   return (
-    <motion.div className="flex-col gap-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+    <motion.div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 min-h-screen heist-bg text-white pb-20 relative overflow-hidden" variants={containerVariants} initial="hidden" animate="visible">
+      
+      {/* Background elements */}
+      <div className="absolute inset-0 bg-blueprint opacity-10 pointer-events-none z-0"></div>
 
       {/* Phase Banner */}
-      <div style={{ padding: '12px 16px', background: isPhase2 ? 'rgba(255, 95, 143, 0.08)' : 'rgba(121, 255, 214, 0.05)', border: `1px solid ${isPhase2 ? 'var(--accent-magenta)' : 'rgba(121, 255, 214, 0.3)'}` }}>
-        <span className={isPhase2 ? 'text-magenta' : 'text-cyan'} style={{ fontWeight: 600 }}>
-          {isPhase2 ? '🔥 PHASE 2 — WAGER MODE · No limits · Winner takes all' : '📋 PHASE 1 — Standard · ±3 token range · +1/-1 stakes'}
+      <motion.div variants={itemVariants} className={`panel-container border-2 p-4 relative z-10 ${isPhase2 ? 'border-heist-red bg-red-900 bg-opacity-20' : 'border-heist-teal bg-teal-900 bg-opacity-20'}`}>
+        <span className={`heist-font text-2xl tracking-widest ${isPhase2 ? 'text-heist-red' : 'text-heist-teal'}`}>
+          {isPhase2 ? '🔥 PHASE 2 — WAGER MODE · NO LIMITS · WINNER TAKES ALL' : '📋 PHASE 1 — STANDARD MODE · ±3 TOKEN RANGE · +1/-1 STAKES'}
         </span>
-      </div>
+      </motion.div>
 
       {isPaused && (
-        <div style={{ padding: '12px 16px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid var(--accent-warning)' }}>
-          <span className="text-warning font-mono" style={{ fontSize: '14px' }}>⏸ GAME PAUSED — ALL SYSTEMS FROZEN.</span>
-        </div>
+        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-yellow bg-yellow-900 bg-opacity-20 p-4 relative z-10">
+          <span className="heist-font text-heist-yellow text-2xl tracking-widest">⏸ OPERATION PAUSED — ALL SYSTEMS FROZEN.</span>
+        </motion.div>
       )}
 
       {/* Queue Action */}
       {myTeam && !amIEliminated && !amITimeout && (
-        <div className="panel" style={{ padding: '24px', textAlign: 'center' }}>
+        <motion.div variants={itemVariants} className="panel-container border-2 border-[#333] p-8 text-center relative z-10 overflow-hidden shadow-2xl">
+          {/* subtle background pulse if in queue */}
+          {isInQueue && !myQueueEntry?.matchedWith && <div className="absolute inset-0 bg-heist-teal opacity-5 animate-pulse pointer-events-none"></div>}
+
           {isInQueue ? (
-            <div>
-              <Search size={48} className="text-cyan" style={{ margin: '0 auto 1rem', animation: 'pulseGlow 2s infinite' }} />
-              <h2 className="font-heading text-cyan" style={{ marginBottom: '0.5rem', fontSize: '2rem' }}>SEARCHING FOR MATCH...</h2>
-              <p className="text-muted font-mono" style={{ marginBottom: '1.5rem' }}>
-                {isPhase2 ? 'Wager mode: any team can be matched' : `Looking for teams within ±3 tokens of your ${myTeam.tokens} TKN`}
-              </p>
-            </div>
-          ) : myTeam.status === 'matched' ? (
-            <div>
-              <Swords size={48} className="text-survival" style={{ margin: '0 auto 1rem' }} />
-              <h2 className="font-heading text-survival" style={{ marginBottom: '0.5rem', fontSize: '2rem' }}>MATCH FOUND!</h2>
-              <p className="text-muted font-mono">Waiting for admin to spin the domain wheel and start the match.</p>
-            </div>
+            myQueueEntry?.matchedWith ? (
+              <div className="flex flex-col items-center">
+                <Swords size={64} className="text-heist-red mb-4 animate-pulse" />
+                <h2 className="heist-font text-heist-red text-5xl mb-2 tracking-widest">TARGET ACQUIRED!</h2>
+                <div className="heist-mono text-xl mb-4 p-4 border-2 border-heist-red bg-black bg-opacity-70 inline-flex items-center gap-4">
+                  <span className="text-gray-500">VS</span> 
+                  <span className="text-white text-2xl font-bold">{teams.find(t => t.id === myQueueEntry.matchedWith)?.name || 'UNKNOWN CREW'}</span>
+                </div>
+                <p className="heist-mono text-gray-400 text-lg uppercase">Proceed to the briefing room for the Domain Spin immediately.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center">
+                <Search size={64} className="text-heist-teal mb-4 animate-pulse" />
+                <h2 className="heist-font text-heist-teal text-4xl mb-2 tracking-widest">HUNTING FOR TARGET...</h2>
+                <p className="heist-mono text-gray-400 text-lg uppercase mb-6">
+                  {isPhase2 ? 'WAGER MODE: ANY CREW CAN BE TARGETED' : `SCANNING FOR CREWS WITHIN ±3 TOKENS OF YOUR ${myTeam.tokens} TKN`}
+                </p>
+              </div>
+            )
           ) : myTeam.status === 'fighting' ? (
-            <div>
-              <Swords size={48} className="text-danger" style={{ margin: '0 auto 1rem', animation: 'pulseGlow 1.5s infinite' }} />
-              <h2 className="font-heading text-danger" style={{ fontSize: '2rem' }}>IN MATCH!</h2>
-              <p className="text-muted font-mono">Check the Battle tab for details.</p>
+            <div className="flex flex-col items-center">
+              <Swords size={64} className="text-heist-red mb-4 animate-bounce" />
+              <h2 className="heist-font text-heist-red text-5xl mb-2 tracking-widest">INFILTRATION ACTIVE!</h2>
+              <p className="heist-mono text-gray-400 text-lg uppercase">Monitor the Battle feed for live intel.</p>
             </div>
           ) : (
-            <div>
-              <Crosshair size={56} className="text-survival" style={{ margin: '0 auto 1rem', opacity: 0.7 }} />
-              <h2 className="font-heading" style={{ marginBottom: '0.5rem', fontSize: '2rem' }}>AUTO-MATCH ENABLED</h2>
-              <p className="text-muted font-mono" style={{ marginBottom: '1.5rem', maxWidth: '500px', margin: '0 auto 1.5rem' }}>
-                You will be queued automatically and paired with an eligible opponent.
+            <div className="flex flex-col items-center">
+              <Crosshair size={64} className="text-heist-teal mb-4 opacity-70" />
+              <h2 className="heist-font text-white text-4xl mb-2 tracking-widest">AUTO-MATCH ENGAGED</h2>
+              <p className="heist-mono text-gray-400 text-lg uppercase max-w-lg mx-auto mb-6">
+                You will be queued automatically and paired with an eligible target.
               </p>
               {(isPaused || amIBusy) && (
-                <div className="text-muted font-mono" style={{ fontSize: '0.85rem' }}>
-                  Matchmaking will resume automatically when your team is eligible.
+                <div className="heist-mono text-heist-yellow text-sm uppercase">
+                  Matchmaking will resume automatically when your crew is cleared.
                 </div>
               )}
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
+      {/* Queue Diagnostics */}
       {isInQueue && myQueueDiagnostics && (
-        <div className="panel" style={{ padding: '20px' }}>
-          <div className="flex items-center justify-between" style={{ marginBottom: '0.75rem' }}>
-            <h3 className="font-heading text-warning" style={{ margin: 0, fontSize: '1.25rem' }}>SEARCH STATE REASONS</h3>
-            <span className={`badge ${myQueueDiagnostics.hasAnyPossibleMatch ? 'badge-cyan' : 'badge-warning'}`}>
-              {myQueueDiagnostics.hasAnyPossibleMatch ? 'Some teams are eligible' : 'Currently blocked'}
+        <motion.div variants={itemVariants} className="panel-container border-2 border-[#333] p-6 relative z-10">
+          <div className="flex items-center justify-between mb-4 border-b-2 border-gray-700 pb-3">
+            <h3 className="heist-font text-heist-yellow text-2xl tracking-widest m-0">SCAN DIAGNOSTICS</h3>
+            <span className={`px-3 py-1 heist-mono text-xs uppercase border ${myQueueDiagnostics.hasAnyPossibleMatch ? 'border-heist-teal text-heist-teal' : 'border-heist-yellow text-heist-yellow'}`}>
+              {myQueueDiagnostics.hasAnyPossibleMatch ? 'TARGETS ELIGIBLE' : 'SCAN BLOCKED'}
             </span>
           </div>
           {myQueueDiagnostics.blockers.length === 0 && (
-            <div className="text-muted font-mono" style={{ fontSize: '0.82rem' }}>No opponent is searching right now. You will be matched as soon as one joins.</div>
+            <div className="heist-mono text-gray-400 text-sm uppercase">No rival crews scanning right now. You will be matched upon detection.</div>
           )}
-          {myQueueDiagnostics.blockers.map((b) => (
-            <div key={b.teamId} style={{ marginTop: '0.45rem', padding: '0.55rem 0.7rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}>
-              <span className="font-mono" style={{ fontSize: '0.78rem' }}>
-                vs {b.teamName}: {b.canMatchNow ? 'Eligible now' : b.reasons.join(' | ')}
-              </span>
-            </div>
-          ))}
-        </div>
+          <div className="flex flex-col gap-2">
+            {myQueueDiagnostics.blockers.map((b) => (
+              <div key={b.teamId} className="p-3 border border-gray-800 bg-black bg-opacity-50">
+                <span className="heist-mono text-sm uppercase">
+                  <span className="text-gray-500">VS</span> <span className="text-white">{b.teamName}:</span> {b.canMatchNow ? <span className="text-heist-teal">Eligible now</span> : <span className="text-heist-red">{b.reasons.join(' | ')}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
       )}
 
-      <div className="panel" style={{ padding: '20px' }}>
-        <div className="grid-12" style={{ gap: '12px' }}>
-          <div style={{ gridColumn: 'span 4', padding: '12px', background: 'rgba(255,51,102,0.05)', border: '1px solid rgba(255,51,102,0.2)', borderRadius: '10px' }}>
-            <div className="text-muted font-mono" style={{ fontSize: '0.72rem' }}>LIVE TEAM FIGHTING</div>
-            <div className="font-heading text-danger" style={{ fontSize: '1.35rem' }}>{fightingTeams.length}</div>
+      {/* Stats row */}
+      <motion.div variants={itemVariants} className="panel-container border-2 border-[#333] p-6 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 border border-heist-red bg-red-900 bg-opacity-10 text-center">
+            <div className="heist-mono text-gray-400 text-xs uppercase mb-1">CREWS IN COMBAT</div>
+            <div className="heist-font text-heist-red text-4xl">{fightingTeams.length}</div>
           </div>
-          <div style={{ gridColumn: 'span 4', padding: '12px', background: 'rgba(121,255,214,0.05)', border: '1px solid rgba(121,255,214,0.2)', borderRadius: '10px' }}>
-            <div className="text-muted font-mono" style={{ fontSize: '0.72rem' }}>TEAM ONLINE (SEARCHING)</div>
-            <div className="font-heading text-cyan" style={{ fontSize: '1.35rem' }}>{waitingQueue.length}</div>
+          <div className="p-4 border border-heist-teal bg-teal-900 bg-opacity-10 text-center">
+            <div className="heist-mono text-gray-400 text-xs uppercase mb-1">CREWS SCANNING</div>
+            <div className="heist-font text-heist-teal text-4xl">{waitingQueue.length}</div>
           </div>
-          <div style={{ gridColumn: 'span 4', padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', borderRadius: '10px' }}>
-            <div className="text-muted font-mono" style={{ fontSize: '0.72rem' }}>ALL TEAMS</div>
-            <div className="font-heading" style={{ fontSize: '1.35rem' }}>{teams.length}</div>
+          <div className="p-4 border border-gray-600 bg-gray-900 bg-opacity-30 text-center">
+            <div className="heist-mono text-gray-400 text-xs uppercase mb-1">TOTAL CREWS</div>
+            <div className="heist-font text-white text-4xl">{teams.length}</div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Timeout Banner */}
       {amITimeout && myTeam.timeoutUntil && (
-        <div className="panel text-center" style={{ padding: '32px', border: '1px solid var(--accent-warning)' }}>
-          <Timer size={48} className="text-warning" style={{ margin: '0 auto 1rem' }} />
-          <h2 className="font-heading text-warning" style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>TIMEOUT</h2>
-          <p className="text-muted font-mono" style={{ marginBottom: '1rem' }}>You hit 0 tokens. Wait for the timeout to expire and you'll reset to 1 token.</p>
+        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-yellow p-8 text-center relative z-10 bg-black">
+          <Timer size={64} className="text-heist-yellow mb-4 mx-auto animate-pulse" />
+          <h2 className="heist-font text-heist-yellow text-5xl mb-2 tracking-widest">TIMEOUT</h2>
+          <p className="heist-mono text-gray-400 text-lg uppercase mb-6">You hit 0 tokens. Wait for the timeout to expire and you'll reset to 1 token.</p>
           <TimeoutCountdown until={myTeam.timeoutUntil} />
-        </div>
+        </motion.div>
       )}
 
       {/* Eliminated Banner */}
       {amIEliminated && (
-        <div className="panel text-center" style={{ padding: '32px', border: '1px solid var(--accent-danger)' }}>
-          <Ban size={48} className="text-danger" style={{ margin: '0 auto 1rem' }} />
-          <h2 className="font-heading text-danger" style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>ELIMINATED</h2>
-          <p className="text-muted font-mono">You have been permanently eliminated. Spectate the remaining matches.</p>
-        </div>
+        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-red p-8 text-center relative z-10 bg-black">
+          <Ban size={64} className="text-heist-red mb-4 mx-auto" />
+          <h2 className="heist-font text-heist-red text-5xl mb-2 tracking-widest">ELIMINATED</h2>
+          <p className="heist-mono text-gray-400 text-lg uppercase">You have been permanently eliminated. Spectate the remaining operations.</p>
+        </motion.div>
       )}
 
       {/* Live Matches */}
-      <div className="panel glow-danger" style={{ padding: '24px' }}>
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2 text-danger">
-            <Swords className="animate-pulse" />
-            <h2 className="m-0 text-danger" style={{ margin: 0 }}>LIVE MATCHES</h2>
+      <motion.div variants={itemVariants} className="panel-container border-2 border-heist-red p-6 relative z-10 shadow-[0_0_20px_rgba(211,47,47,0.2)]">
+        <div className="flex items-center justify-between mb-6 border-b-2 border-heist-red pb-3">
+          <div className="flex items-center gap-3">
+            <Swords className="text-heist-red animate-pulse" size={28} />
+            <h2 className="heist-font text-heist-red text-3xl tracking-wider m-0">LIVE OPERATIONS</h2>
           </div>
-          <div className="badge badge-danger">{activeMatches.length} ACTIVE</div>
+          <div className="px-3 py-1 bg-heist-red text-white heist-mono text-sm">{activeMatches.length} ACTIVE</div>
         </div>
 
-        <div className="grid-12" style={{ gap: '16px' }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {activeMatches.map(match => (
-            <div key={match.id} style={{ gridColumn: 'span 4', background: 'rgba(255,51,102,0.05)', padding: '20px', border: '1px solid rgba(255,51,102,0.2)', borderRadius: 'var(--radius-md)' }}>
-              <div className="flex justify-between items-center mb-4">
-                <span className="badge badge-survival">{match.domain}</span>
-                <span className={`badge ${match.isWager ? 'badge-magenta' : 'badge-warning'}`}>{match.isWager ? 'WAGER' : '±1'}</span>
+            <div key={match.id} className="p-4 border border-heist-red bg-black bg-opacity-70 relative overflow-hidden group">
+              {/* background scanline */}
+              <div className="absolute top-0 left-0 w-full h-1 bg-heist-red opacity-50 transform -translate-y-full group-hover:animate-scanline"></div>
+              
+              <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-2">
+                <span className="px-2 py-1 border border-heist-teal text-heist-teal heist-mono text-[10px] uppercase">{match.domain}</span>
+                <span className={`px-2 py-1 heist-mono text-[10px] uppercase ${match.isWager ? 'bg-heist-red text-white' : 'border border-heist-yellow text-heist-yellow'}`}>{match.isWager ? 'WAGER' : '±1'}</span>
               </div>
               <div className="flex justify-between items-center text-center">
-                <div className="font-heading" style={{ flex: 1, fontSize: '1.4rem' }}>{match.teamA.name}</div>
-                <div className="font-heading text-danger" style={{ padding: '0 12px', fontSize: '1.8rem' }}>VS</div>
-                <div className="font-heading" style={{ flex: 1, fontSize: '1.4rem' }}>{match.teamB.name}</div>
+                <div className="heist-font text-2xl text-white flex-1 truncate">{match.teamA.name}</div>
+                <div className="heist-font text-heist-red text-3xl px-3">VS</div>
+                <div className="heist-font text-2xl text-white flex-1 truncate">{match.teamB.name}</div>
               </div>
             </div>
           ))}
           {activeMatches.length === 0 && (
-            <div className="text-muted text-center font-mono" style={{ gridColumn: 'span 12', padding: '32px' }}>
-              NO LIVE MATCHES AT THIS TIME.
+            <div className="heist-mono text-gray-500 uppercase col-span-full text-center py-8">
+              NO LIVE OPERATIONS AT THIS TIME.
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* All Teams */}
-      <div className="panel" style={{ padding: '24px' }}>
-        <div className="flex items-center gap-2 mb-6">
-          <Crosshair className="text-survival" />
-          <h2 className="m-0 font-heading tracking-wider text-xl" style={{ margin: 0 }}>ALL TEAMS</h2>
+      <motion.div variants={itemVariants} className="panel-container border-2 border-[#333] p-6 relative z-10 bg-black bg-opacity-80">
+        <div className="flex items-center gap-3 mb-6 border-b-2 border-gray-700 pb-3">
+          <Crosshair className="text-heist-teal" size={28} />
+          <h2 className="heist-font text-white text-3xl tracking-wider m-0">ALL CREWS</h2>
         </div>
-        <div className="grid-12" style={{ gap: '16px' }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {teams.filter(t => !myTeam || t.id !== myTeam.id).map(team => {
             const isEliminated = team.status === 'eliminated';
             const isTimeout = team.status === 'timeout';
             return (
-              <div key={team.id} style={{
-                gridColumn: 'span 4', padding: '16px',
-                background: isEliminated ? 'rgba(255, 59, 59, 0.05)' : isTimeout ? 'rgba(255, 201, 77, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-                border: `1px solid ${isEliminated ? 'var(--accent-danger)' : isTimeout ? 'var(--accent-warning)' : 'var(--border-subtle)'}`,
-                borderRadius: 'var(--radius-md)', opacity: isEliminated ? 0.5 : 1
-              }}>
-                <div className="flex justify-between items-center mb-2">
-                  <div className="font-heading" style={{ fontSize: '1.3rem', color: isEliminated ? 'var(--accent-danger)' : 'inherit', textDecoration: isEliminated ? 'line-through' : 'none' }}>{team.name}</div>
-                  <span className={`badge badge-${isEliminated ? 'danger' : isTimeout ? 'warning' : team.status === 'idle' ? 'survival' : team.status === 'fighting' ? 'danger' : 'cyan'}`}>
-                    {team.status.toUpperCase()}
+              <div key={team.id} className={`p-4 border ${isEliminated ? 'border-heist-red bg-red-900 bg-opacity-10' : isTimeout ? 'border-heist-yellow bg-yellow-900 bg-opacity-10' : 'border-gray-800 hover:border-gray-500'} transition-colors relative`}>
+                <div className="flex justify-between items-center mb-3">
+                  <div className={`heist-font text-2xl truncate pr-2 ${isEliminated ? 'text-heist-red line-through' : 'text-white'}`}>{team.name}</div>
+                  <span className={`px-2 py-0.5 heist-mono text-[10px] uppercase border ${isEliminated ? 'border-heist-red text-heist-red' : isTimeout ? 'border-heist-yellow text-heist-yellow' : team.status === 'idle' ? 'border-heist-teal text-heist-teal' : team.status === 'fighting' ? 'border-heist-red bg-heist-red text-white' : 'border-gray-500 text-gray-500'}`}>
+                    {team.status}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <div className={`badge ${isEliminated ? 'badge-danger' : 'badge-survival'}`}>{team.tokens} TKN</div>
-                  <div className="text-muted font-mono" style={{ fontSize: '0.75rem' }}>{team.members} members</div>
+                  <div className={`px-2 py-1 heist-font text-xl ${isEliminated ? 'text-heist-red' : 'text-heist-yellow border-b border-heist-yellow'}`}>{team.tokens} TKN</div>
+                  <div className="heist-mono text-gray-500 text-[10px] uppercase">{team.members} members</div>
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   );
 };
@@ -261,7 +279,7 @@ const TimeoutCountdown = ({ until }) => {
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
   }, [until]);
-  return <div className="game-timer" style={{ fontSize: '2rem', display: 'inline-block' }}>{display}</div>;
+  return <div className="heist-font text-white tracking-widest" style={{ fontSize: '4rem', display: 'inline-block' }}>{display}</div>;
 };
 
 export default ArenaScreen;

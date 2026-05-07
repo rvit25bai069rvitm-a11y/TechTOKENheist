@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useGameState } from '../hooks/useGameState';
-import { Target, ShieldAlert, Lock, Swords, Clock, Timer } from 'lucide-react';
+import { Target, ShieldAlert, Lock, Swords, Clock, Timer, VenetianMask } from 'lucide-react';
+import './AdminScreen.css';
 
 const MatchTimer = ({ startTime }) => {
   const [display, setDisplay] = useState('0:00');
@@ -16,7 +17,7 @@ const MatchTimer = ({ startTime }) => {
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
   }, [startTime]);
-  return <span className="stopwatch">{display}</span>;
+  return <span className="heist-font text-heist-yellow tracking-widest text-4xl">{display}</span>;
 };
 
 const TimeoutCountdown = ({ until }) => {
@@ -32,128 +33,176 @@ const TimeoutCountdown = ({ until }) => {
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
   }, [until]);
-  return <div className="game-timer" style={{ fontSize: '2.5rem', display: 'inline-block' }}>{display}</div>;
+  return <div className="heist-font text-white tracking-widest" style={{ fontSize: '5rem', display: 'inline-block' }}>{display}</div>;
 };
 
 const BattleScreen = () => {
   const { myTeam, currentActiveMatch, gameState, isInQueue } = useGameState();
 
-  if (!gameState.isGameActive && !gameState.isPaused) {
-    return (
-      <div className="card text-center" style={{ padding: '4rem 2rem' }}>
-        <Lock size={48} className="text-warning" style={{ marginBottom: '1rem', opacity: 0.6 }} />
-        <h2 className="font-heading" style={{ color: 'var(--accent-warning)', marginBottom: '0.5rem', fontSize: '2rem' }}>BATTLE LOCKED</h2>
-        <p className="text-muted font-mono">The game has not started yet.</p>
-      </div>
-    );
-  }
+  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } };
 
-  if (gameState.isPaused) {
-    return (
-      <div className="card text-center" style={{ padding: '4rem 2rem', border: '1px solid var(--accent-warning)' }}>
-        <Lock size={48} className="text-warning" style={{ marginBottom: '1rem', opacity: 0.6 }} />
-        <h2 className="font-heading" style={{ color: 'var(--accent-warning)', marginBottom: '0.5rem', fontSize: '2rem' }}>GAME PAUSED</h2>
-        <p className="text-muted font-mono">All actions frozen.</p>
-      </div>
-    );
-  }
+  const renderContent = () => {
+    if (!gameState.isGameActive && !gameState.isPaused) {
+      return (
+        <motion.div variants={itemVariants} className="panel-container border-2 border-gray-600 p-16 text-center relative z-10 bg-black bg-opacity-80">
+          <Lock size={64} className="text-gray-500 mb-6 mx-auto" />
+          <h2 className="heist-font text-heist-yellow text-5xl mb-2 tracking-widest">BATTLE LOCKED</h2>
+          <p className="heist-mono text-gray-400 text-lg uppercase">The operation has not commenced.</p>
+        </motion.div>
+      );
+    }
 
-  // Timeout state
-  if (myTeam?.status === 'timeout' && myTeam.timeoutUntil) {
-    return (
-      <motion.div className="card text-center" style={{ padding: '4rem 2rem', border: '1px solid var(--accent-warning)' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-        <Timer size={64} className="text-warning" style={{ margin: '0 auto 1.5rem', animation: 'pulseGlow 2s infinite' }} />
-        <h2 className="font-heading text-warning" style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>TIMEOUT</h2>
-        <p className="text-muted font-mono" style={{ marginBottom: '2rem', maxWidth: '400px', margin: '0 auto 2rem' }}>
-          You hit 0 tokens. Waiting for timeout to expire. You'll be automatically reset to 1 token.
-        </p>
-        <TimeoutCountdown until={myTeam.timeoutUntil} />
-        <div className="text-muted font-mono" style={{ marginTop: '1rem', fontSize: '0.8rem' }}>TIME REMAINING</div>
-      </motion.div>
-    );
-  }
+    if (gameState.isPaused) {
+      return (
+        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-yellow p-16 text-center relative z-10 bg-yellow-900 bg-opacity-20">
+          <Lock size={64} className="text-heist-yellow mb-6 mx-auto opacity-70" />
+          <h2 className="heist-font text-heist-yellow text-5xl mb-2 tracking-widest">OPERATION PAUSED</h2>
+          <p className="heist-mono text-gray-400 text-lg uppercase">All actions frozen by The Professor.</p>
+        </motion.div>
+      );
+    }
 
-  // Eliminated state
-  if (myTeam?.status === 'eliminated') {
-    return (
-      <motion.div className="card text-center" style={{ padding: '4rem 2rem', border: '1px solid var(--accent-danger)' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>☠️</div>
-        <h2 className="font-heading text-danger" style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>ELIMINATED</h2>
-        <p className="text-muted font-mono">You have been permanently eliminated from the tournament.</p>
-      </motion.div>
-    );
-  }
+    // Timeout state
+    if (myTeam?.status === 'timeout' && myTeam.timeoutUntil) {
+      return (
+        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-yellow p-16 text-center relative z-10 bg-black">
+          <Timer size={80} className="text-heist-yellow mb-6 mx-auto animate-pulse" />
+          <h2 className="heist-font text-heist-yellow text-5xl mb-4 tracking-widest">TIMEOUT</h2>
+          <p className="heist-mono text-gray-400 text-lg uppercase max-w-lg mx-auto mb-8">
+            You hit 0 tokens. Waiting for timeout to expire. You will be automatically reset to 1 token.
+          </p>
+          <TimeoutCountdown until={myTeam.timeoutUntil} />
+          <div className="heist-mono text-gray-500 text-sm uppercase mt-4">TIME REMAINING</div>
+        </motion.div>
+      );
+    }
 
-  return (
-    <div className="flex-col gap-6">
-      {/* Active Fight */}
-      {currentActiveMatch ? (
-        <motion.div className="card" style={{ padding: '2.5rem 2rem', textAlign: 'center', position: 'relative', overflow: 'hidden' }} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-          <div style={{ position: 'absolute', top: '-50%', left: '-50%', width: '200%', height: '200%', background: 'radial-gradient(circle, rgba(255,0,255,0.08) 0%, transparent 60%)', animation: 'spin 10s linear infinite', zIndex: 0 }} />
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <div className="badge badge-danger" style={{ marginBottom: '1rem', fontSize: '1rem', padding: '0.5rem 1rem' }}>⚔️ MATCH IN PROGRESS</div>
-            <div className={`badge ${currentActiveMatch.isWager ? 'badge-magenta' : 'badge-survival'}`} style={{ marginBottom: '2rem', display: 'inline-block', marginLeft: '0.5rem', fontSize: '1rem', padding: '0.5rem 1rem' }}>{currentActiveMatch.domain}</div>
+    // Eliminated state
+    if (myTeam?.status === 'eliminated') {
+      return (
+        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-red p-16 text-center relative z-10 bg-black">
+          <VenetianMask size={80} className="text-heist-red mb-6 mx-auto opacity-80" />
+          <h2 className="heist-font text-heist-red text-6xl mb-4 tracking-widest">ELIMINATED</h2>
+          <p className="heist-mono text-gray-400 text-xl uppercase">You have been permanently eliminated from the tournament.</p>
+        </motion.div>
+      );
+    }
 
-            <div className="flex justify-center items-center gap-8" style={{ marginBottom: '2rem' }}>
-              <div>
-                <div className="font-heading" style={{ fontSize: '2rem', letterSpacing: '2px' }}>
-                  {currentActiveMatch.teamA.id === myTeam?.id ? 'YOUR TEAM' : currentActiveMatch.teamA.name}
+    // Active Fight
+    if (currentActiveMatch) {
+      return (
+        <motion.div variants={itemVariants} className="panel-container border-4 border-heist-red p-8 text-center relative z-10 overflow-hidden shadow-[0_0_40px_rgba(211,47,47,0.3)] bg-black">
+          {/* Radar Sweep Background */}
+          <div className="absolute top-1/2 left-1/2 w-[200%] h-[200%] -translate-x-1/2 -translate-y-1/2" style={{ background: 'conic-gradient(from 0deg, transparent 0 340deg, rgba(211,47,47,0.4) 360deg)', animation: 'radar-spin 4s linear infinite', zIndex: 0 }}></div>
+          <div className="absolute inset-0 bg-blueprint opacity-20 z-0 pointer-events-none"></div>
+
+          <div className="relative z-10">
+            <div className="inline-block px-4 py-2 bg-heist-red text-white heist-font tracking-widest text-2xl mb-6 shadow-md border border-white">
+              ⚔️ INFILTRATION IN PROGRESS
+            </div>
+            
+            <div className="mb-10">
+              <span className={`px-4 py-2 heist-font tracking-widest text-2xl ${currentActiveMatch.isWager ? 'bg-heist-red text-white' : 'border-2 border-heist-teal text-heist-teal bg-black'}`}>
+                {currentActiveMatch.domain}
+              </span>
+            </div>
+
+            <div className="flex flex-col md:flex-row justify-center items-center gap-6 md:gap-16 mb-12">
+              <div className="flex flex-col items-center">
+                <div className="heist-font text-5xl tracking-widest text-white drop-shadow-md mb-2">
+                  {currentActiveMatch.teamA.id === myTeam?.id ? 'YOUR CREW' : currentActiveMatch.teamA.name}
                 </div>
-                <div style={{ marginTop: '0.5rem' }}><div className="badge badge-survival">{currentActiveMatch.teamA.tokens} TKN</div></div>
+                <div className="px-3 py-1 border-b-2 border-heist-yellow heist-font text-heist-yellow text-3xl">
+                  {currentActiveMatch.teamA.tokens} TKN
+                </div>
               </div>
-              <div className="font-heading" style={{ fontSize: '4rem', color: 'var(--accent-danger)', textShadow: '0 0 20px rgba(255,51,102,0.5)' }}>VS</div>
-              <div>
-                <div className="font-heading" style={{ fontSize: '2rem', letterSpacing: '2px' }}>
-                  {currentActiveMatch.teamB.id === myTeam?.id ? 'YOUR TEAM' : currentActiveMatch.teamB.name}
+              
+              <div className="heist-font text-7xl text-heist-red drop-shadow-[0_0_15px_rgba(211,47,47,0.8)] mx-4 my-4 md:my-0">
+                VS
+              </div>
+              
+              <div className="flex flex-col items-center">
+                <div className="heist-font text-5xl tracking-widest text-white drop-shadow-md mb-2">
+                  {currentActiveMatch.teamB.id === myTeam?.id ? 'YOUR CREW' : currentActiveMatch.teamB.name}
                 </div>
-                <div style={{ marginTop: '0.5rem' }}><div className="badge badge-survival">{currentActiveMatch.teamB.tokens} TKN</div></div>
+                <div className="px-3 py-1 border-b-2 border-heist-yellow heist-font text-heist-yellow text-3xl">
+                  {currentActiveMatch.teamB.tokens} TKN
+                </div>
               </div>
             </div>
 
-            <div style={{ padding: '1rem 2rem', background: 'rgba(0,0,0,0.5)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-glow)', display: 'inline-block' }}>
-              <div className="text-muted font-mono" style={{ fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.5rem' }}>TIME ELAPSED</div>
+            <div className="inline-block p-6 bg-black bg-opacity-80 border-2 border-gray-700 shadow-inner mb-8 min-w-[250px]">
+              <div className="heist-mono text-gray-500 text-sm uppercase mb-2 tracking-widest">ELAPSED DURATION</div>
               <MatchTimer startTime={currentActiveMatch.startTime} />
             </div>
 
-            <div style={{ marginTop: '1.5rem' }}>
-              <div className="text-warning flex items-center justify-center gap-2 font-mono" style={{ fontWeight: 700 }}>
-                <ShieldAlert size={18} /> {currentActiveMatch.isWager ? 'WAGER MODE — HIGH STAKES' : 'STAKES: ±1 TKN'}
+            <div className="mt-4 border-t border-gray-800 pt-6 max-w-lg mx-auto">
+              <div className="text-heist-yellow flex items-center justify-center gap-3 heist-mono text-lg uppercase mb-2">
+                <ShieldAlert size={24} /> {currentActiveMatch.isWager ? 'WAGER MODE — HIGH STAKES' : 'STAKES: ±1 TKN'}
               </div>
-              <div className="text-muted font-mono" style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>ADMIN WILL DECLARE WINNER</div>
+              <div className="heist-mono text-gray-500 text-sm uppercase">AWAITING ADMIN DECLARATION OF VICTORY</div>
             </div>
           </div>
         </motion.div>
-      ) : myTeam?.status === 'matched' ? (
-        <motion.div className="card text-center" style={{ padding: '3rem 2rem' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <Swords size={56} className="text-survival" style={{ marginBottom: '1rem', animation: 'float 3s ease-in-out infinite' }} />
-          <h2 className="font-heading text-survival" style={{ marginBottom: '0.5rem', fontSize: '2.5rem' }}>MATCH FOUND!</h2>
-          <p className="text-muted font-mono" style={{ maxWidth: '400px', margin: '0 auto', fontSize: '0.9rem' }}>
-            Admin will spin the domain wheel and start your match shortly.
+      );
+    }
+
+    if (myTeam?.status === 'matched') {
+      return (
+        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-teal p-16 text-center relative z-10 bg-black">
+          <Swords size={80} className="text-heist-teal mb-6 mx-auto animate-bounce" />
+          <h2 className="heist-font text-heist-teal text-6xl mb-4 tracking-widest">TARGET ACQUIRED!</h2>
+          <p className="heist-mono text-gray-400 text-xl uppercase max-w-lg mx-auto mb-8">
+            The Professor is assigning the target domain. Prepare for infiltration.
           </p>
-          <div className="badge badge-cyan" style={{ marginTop: '1.5rem', fontSize: '1rem' }}>AWAITING ADMIN...</div>
+          <div className="px-6 py-2 bg-heist-teal text-black heist-font text-2xl tracking-widest inline-block shadow-md">
+            AWAITING BRIEFING...
+          </div>
         </motion.div>
-      ) : isInQueue ? (
-        <motion.div className="card text-center" style={{ padding: '3rem 2rem' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <Swords size={56} className="text-cyan" style={{ marginBottom: '1rem', animation: 'pulseGlow 2s infinite' }} />
-          <h2 className="font-heading text-cyan" style={{ marginBottom: '0.5rem', fontSize: '2.5rem' }}>IN QUEUE</h2>
-          <p className="text-muted font-mono" style={{ maxWidth: '400px', margin: '0 auto' }}>
-            Searching for an opponent in your token range...
+      );
+    }
+
+    if (isInQueue) {
+      return (
+        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-teal p-16 text-center relative z-10 bg-black overflow-hidden">
+          {/* Scanning line effect */}
+          <div className="absolute inset-0 bg-heist-teal opacity-5 pointer-events-none animate-pulse"></div>
+          
+          <Search size={80} className="text-heist-teal mb-6 mx-auto animate-spin-slow" />
+          <h2 className="heist-font text-heist-teal text-5xl mb-4 tracking-widest">SCANNING NETWORK</h2>
+          <p className="heist-mono text-gray-400 text-xl uppercase max-w-lg mx-auto">
+            Hunting for an eligible target...
           </p>
         </motion.div>
-      ) : (
-        <motion.div className="card text-center" style={{ padding: '4rem 2rem', minHeight: '350px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <Target size={56} className="text-muted" style={{ marginBottom: '1rem', opacity: 0.4 }} />
-          <h2 className="text-muted font-heading" style={{ marginBottom: '0.5rem', fontSize: '2.5rem' }}>NO ACTIVE MATCH</h2>
-          <p className="text-muted font-mono" style={{ maxWidth: '400px', margin: '0 auto' }}>
-            Go to the Arena. Eligible teams are queued automatically for matchmaking.
-          </p>
-        </motion.div>
-      )}
+      );
+    }
+
+    return (
+      <motion.div variants={itemVariants} className="panel-container border-2 border-[#333] p-16 text-center relative z-10 bg-black flex flex-col items-center justify-center min-h-[400px]">
+        <Target size={80} className="text-gray-600 mb-6 mx-auto opacity-50" />
+        <h2 className="heist-font text-gray-400 text-5xl mb-4 tracking-widest">NO ACTIVE OPERATION</h2>
+        <p className="heist-mono text-gray-500 text-lg uppercase max-w-lg mx-auto">
+          Proceed to the Arena. Eligible crews are queued automatically for matchmaking.
+        </p>
+      </motion.div>
+    );
+  };
+
+  return (
+    <motion.div className="min-h-screen heist-bg p-4 sm:p-6 lg:p-8 text-white relative overflow-hidden flex flex-col gap-6 pb-20" variants={containerVariants} initial="hidden" animate="visible">
+      {/* Background Graffiti */}
+      <div className="graffiti text-8xl top-40 right-20 transform -rotate-12 opacity-5 pointer-events-none">BELLA CIAO</div>
+      <div className="graffiti text-6xl bottom-20 left-10 transform rotate-6 opacity-5 pointer-events-none">TOKYO</div>
+      
+      {renderContent()}
 
       <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes radar-spin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+        @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin-slow { animation: spin-slow 8s linear infinite; }
       `}</style>
-    </div>
+    </motion.div>
   );
 };
 

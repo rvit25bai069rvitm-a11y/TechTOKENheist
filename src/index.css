@@ -1,4 +1,68 @@
 @import url('https://fonts.googleapis.com/css2?family=Creepster&family=Special+Elite&family=Share+Tech+Mono&family=Rubik:wght@500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Brutalist Components */
+  .b-panel {
+    @apply bg-neo-black border-4 border-white shadow-brutal p-6 relative;
+  }
+  
+  .b-card {
+    @apply bg-neo-black border-2 border-white shadow-brutal p-4 transition-all duration-200;
+  }
+  
+  .b-card:hover {
+    @apply shadow-brutal-lg -translate-y-1 border-neo-yellow;
+  }
+
+  .b-btn {
+    @apply font-display uppercase tracking-wider border-2 border-neo-black bg-white text-neo-black px-6 py-3 transition-all duration-200 shadow-brutal;
+  }
+  
+  .b-btn:hover:not(:disabled) {
+    @apply shadow-brutal-lg -translate-y-1 bg-neo-yellow;
+  }
+  
+  .b-btn:active:not(:disabled) {
+    @apply translate-x-1 translate-y-1 shadow-none;
+  }
+
+  .b-btn:disabled {
+    @apply opacity-50 cursor-not-allowed bg-gray-300;
+  }
+
+  .b-btn-primary {
+    @apply bg-neo-yellow text-neo-black;
+  }
+
+  .b-btn-primary:hover:not(:disabled) {
+    @apply bg-white;
+  }
+
+  .b-btn-danger {
+    @apply bg-neo-red text-white border-white;
+  }
+  
+  .b-btn-danger:hover:not(:disabled) {
+    @apply bg-white text-neo-red border-neo-red;
+  }
+
+  .b-input {
+    @apply bg-neo-black border-2 border-white text-white px-4 py-3 font-sans w-full transition-all duration-200 outline-none focus:border-neo-blue focus:shadow-brutal;
+  }
+  
+  .b-input::placeholder {
+    @apply text-gray-400;
+  }
+
+  .b-badge {
+    @apply px-3 py-1 font-display text-xs uppercase border-2 border-neo-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)];
+  }
+}
 
 :root {
   --bg-dark: #050705;

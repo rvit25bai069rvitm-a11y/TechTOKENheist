@@ -1,8 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useGameState } from '../hooks/useGameState';
-import { Users, Swords, Flame, Settings, Plus, X, Trophy, Clock, Play, Pause, Zap, Search, RotateCcw } from 'lucide-react';
+import {
+  VenetianMask, Banknote, Lock, Bomb, Users, Search, Flame, Settings,
+  Plus, X, Fingerprint, Wallet, Map, ScrollText, Crown, Zap, AlertTriangle, Clock
+} from 'lucide-react';
 import DomainWheel from '../components/DomainWheel';
 import { buildQueueDiagnostics } from '../utils/matchmaking';
+import { PROFILE_AVATARS, DEFAULT_PROFILE_NAME, getProfileAvatar, getProfileLabel } from '../data/profileAvatars';
+import './AdminScreen.css';
+
+const CUSTOM_PROFILE_VALUE = '__custom__';
 
 const MatchTimer = ({ startTime }) => {
   const [display, setDisplay] = useState('0:00');
@@ -17,7 +24,7 @@ const MatchTimer = ({ startTime }) => {
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
   }, [startTime]);
-  return <div className="stopwatch">{display}</div>;
+  return <div className="heist-mono text-heist-yellow">{display}</div>;
 };
 
 const TimeoutDisplay = ({ timeoutUntil }) => {
@@ -33,52 +40,78 @@ const TimeoutDisplay = ({ timeoutUntil }) => {
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
   }, [timeoutUntil]);
-  return <span className="badge badge-warning">{remaining}</span>;
+  return <span className="heist-mono text-gray-400 bg-gray-900 px-2 border border-gray-600">{remaining}</span>;
 };
 
 const AdminScreen = () => {
   const {
     gameState, teams, matchmakingQueue, activeMatches, matchHistory,
-    sortedLeaderboard, gameTimer, queuePairs, matchConstraints,
-    startGame, stopGame, resetGame, togglePhase, createTeam, editTeam, deleteTeam,
-    updateTokens, createMatch, declareWinner, spinDomain, updateDomains, setTimeoutDuration
+    queuePairs, matchConstraints,
+    startGame, stopGame, resetGame, togglePhase, createTeam, deleteTeam,
+    updateTokens, createMatch, declareWinner, spinDomain, updateDomains, setTimeoutDuration,
+    enrollAllEligible, autoMatchPairs
   } = useGameState();
 
-  const [editingTeam, setEditingTeam] = useState(null);
+  useEffect(() => {
+    if (gameState.isGameActive && !gameState.isPaused) {
+      autoMatchPairs();
+    }
+  }, [matchmakingQueue, teams, gameState.isGameActive, gameState.isPaused, autoMatchPairs]);
+
   const [tab, setTab] = useState('teams');
-  const [teamName, setTeamName] = useState('');
+  const [selectedProfile, setSelectedProfile] = useState(() => PROFILE_AVATARS[0]?.name || '');
+  const [customTeamName, setCustomTeamName] = useState('');
   const [teamPassword, setTeamPassword] = useState('');
   const [memberInput, setMemberInput] = useState('');
   const [memberNames, setMemberNames] = useState([]);
   const [leader, setLeader] = useState('');
-  const [spinResults, setSpinResults] = useState({});
 
   const [domainInput, setDomainInput] = useState('');
   const [timeoutInput, setTimeoutInput] = useState('');
 
   const domains = gameState.domains || ['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition'];
+  const assignedProfiles = useMemo(() => new Set((teams || []).map((team) => team.name)), [teams]);
 
   const addMember = () => {
-    if (memberInput.trim() && memberNames.length < 4) {
-      setMemberNames([...memberNames, memberInput.trim()]);
-      setMemberInput('');
-    }
+    const trimmed = memberInput.trim();
+    if (!trimmed || memberNames.length >= 4 || memberNames.includes(trimmed)) return;
+    setMemberNames((prev) => [...prev, trimmed]);
+    setMemberInput('');
   };
-  const removeMember = (idx) => {
-    const updated = memberNames.filter((_, i) => i !== idx);
+
+  const removeMember = (indexToRemove) => {
+    const removedName = memberNames[indexToRemove];
+    const updated = memberNames.filter((_, idx) => idx !== indexToRemove);
     setMemberNames(updated);
-    if (leader === memberNames[idx]) setLeader('');
+    if (leader === removedName) setLeader('');
   };
+
   const handleCreateTeam = (e) => {
     e.preventDefault();
-    if (!teamName || memberNames.length < 2 || !leader || !teamPassword) return;
+    const isCustom = selectedProfile === CUSTOM_PROFILE_VALUE;
+    const teamName = isCustom ? customTeamName.trim() : selectedProfile;
+    const profileAlreadyAssigned = !isCustom && assignedProfiles.has(selectedProfile);
+
+    if (!teamName || !teamPassword || memberNames.length < 1 || !leader || profileAlreadyAssigned) return;
+
     createTeam({ name: teamName, memberNames, leader, password: teamPassword });
-    setTeamName(''); setTeamPassword(''); setMemberNames([]); setMemberInput(''); setLeader('');
+    setTeamPassword('');
+    setCustomTeamName('');
+    setMemberInput('');
+    setMemberNames([]);
+    setLeader('');
   };
+
+  const selectedProfileLabel = selectedProfile === CUSTOM_PROFILE_VALUE
+    ? 'Custom (Default Avatar)'
+    : getProfileLabel(selectedProfile);
+
+  const selectedProfileAvatar = selectedProfile === CUSTOM_PROFILE_VALUE
+    ? getProfileAvatar(DEFAULT_PROFILE_NAME)
+    : getProfileAvatar(selectedProfile);
 
   const handleSpinForMatch = async (matchId, preferredDomain) => {
     const result = await spinDomain(matchId, preferredDomain);
-    if (result?.domain) setSpinResults(prev => ({ ...prev, [matchId]: result.domain }));
     return result;
   };
 
@@ -100,353 +133,494 @@ const AdminScreen = () => {
     [gameState, teams, matchmakingQueue, matchConstraints]
   );
 
-  const fightingTeams = useMemo(
-    () => teams.filter((t) => t.status === 'fighting'),
-    [teams]
-  );
-
   const tabs = [
-    { id: 'teams', label: 'Teams', icon: <Users size={16} />, count: teams.length },
-    { id: 'queue', label: 'Queue', icon: <Search size={16} />, count: (matchmakingQueue || []).length },
-    { id: 'fighting', label: 'Matches', icon: <Flame size={16} />, count: activeMatches.length },
-    { id: 'settings', label: 'Settings', icon: <Settings size={16} />, count: 0 },
+    { id: 'teams', label: 'TEAMS', icon: <Users size={20} /> },
+    { id: 'queue', label: 'PLANS', icon: <Search size={20} /> },
+    { id: 'fighting', label: 'VAULTS', icon: <Flame size={20} /> },
+    { id: 'settings', label: 'SCHEMATICS', icon: <Settings size={20} /> },
   ];
 
   return (
-    <div className="flex-col gap-4">
-      {/* Header */}
-      <div className="card flex items-center justify-between" style={{ padding: '1rem 1.5rem', border: '1px solid var(--accent-danger)' }}>
-        <div className="flex items-center gap-3">
-          <Settings className="text-danger" size={24} />
-          <h2 className="font-heading" style={{ margin: 0 }}>ADMIN CONTROL</h2>
-        </div>
+    <div className="min-h-screen heist-bg p-4 sm:p-6 lg:p-8 text-white relative flex flex-col gap-3 pb-20 overflow-hidden">
+      <div className="graffiti text-8xl top-20 left-10 transform -rotate-12">BELLA CIAO</div>
+      <div className="graffiti text-6xl bottom-40 right-10 transform rotate-12">RESISTANCE</div>
+      <div className="graffiti text-5xl top-1/2 left-1/3 transform -rotate-6 opacity-[0.03]">EL PROFESOR</div>
+
+      {/* Top Navbar */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-2 relative z-10 gap-4">
         <div className="flex items-center gap-4">
-          {(gameState.isGameActive || gameState.isPaused) && <div className="game-timer flex items-center gap-2 font-mono"><Clock size={14} /> {gameTimer}</div>}
-          <span className={`badge ${gameState.isGameActive ? 'badge-survival' : gameState.isPaused ? 'badge-warning' : 'badge-danger'}`}>
-            {gameState.isGameActive ? 'GAME ACTIVE' : gameState.isPaused ? 'GAME PAUSED' : 'GAME STOPPED'}
-          </span>
-          <span className={`badge ${gameState.phase === 'phase2' ? 'badge-magenta' : 'badge-cyan'}`}>
-            {gameState.phase === 'phase2' ? 'PHASE 2' : 'PHASE 1'}
-          </span>
-          {gameState.isGameActive ? (
-            <button className="btn btn-warning" onClick={stopGame}><Pause size={16} /> Pause</button>
-          ) : (
-            <button className="btn btn-primary" onClick={startGame}><Play size={16} /> {gameState.isPaused ? 'Resume' : 'Start Game'}</button>
-          )}
-          <button className="btn btn-danger" onClick={() => { if(window.confirm('Hard reset tournament?')) resetGame(); }}><X size={16} /> Reset</button>
+          <div className="w-14 h-14 bg-heist-red rounded-full flex items-center justify-center border-2 border-black shadow-lg flex-shrink-0">
+            <VenetianMask className="text-black" size={32} />
+          </div>
+          <div className="flex flex-col">
+            <h1 className="heist-font text-heist-red text-4xl sm:text-5xl m-0 leading-none drop-shadow-md">THE PROFESSOR'S DIRECTORY</h1>
+            <span className="heist-mono text-gray-400 text-xs sm:text-sm tracking-widest uppercase mt-1">ROYAL MINT OPERATIONS</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+          <div className="flex items-center gap-2 border border-heist-teal px-4 py-2 bg-black bg-opacity-70 shadow-inner flex-1 justify-center md:flex-none">
+            <span className="heist-font text-heist-teal tracking-widest text-lg md:text-xl">
+              {gameState.phase === 'phase2' ? 'PHASE 2 — WAGER' : 'PHASE 1 — INFILTRATION'}
+            </span>
+            <Banknote className="text-heist-teal" size={20} />
+          </div>
+          <button
+            className="border border-heist-red text-heist-red px-4 py-2 heist-font text-lg md:text-xl tracking-widest hover:bg-heist-red hover:text-black transition-colors flex-1 md:flex-none"
+            onClick={() => { if (window.confirm('Abort mission? This deletes ALL data.')) resetGame(); }}
+          >
+            ABORT MISSION
+          </button>
         </div>
       </div>
 
-      {/* Phase Toggle */}
-      <div className="card flex items-center justify-between" style={{ padding: '0.75rem 1.5rem', border: `1px solid ${gameState.phase === 'phase2' ? 'var(--accent-magenta)' : 'var(--border-subtle)'}`, background: gameState.phase === 'phase2' ? 'rgba(255, 95, 143, 0.08)' : undefined }}>
-        <div className="flex items-center gap-3">
-          <Zap size={20} className={gameState.phase === 'phase2' ? 'text-magenta' : 'text-muted'} />
-          <div>
-            <div className="font-heading" style={{ fontSize: '1.1rem' }}>{gameState.phase === 'phase2' ? 'PHASE 2 — WAGER MODE' : 'PHASE 1 — STANDARD'}</div>
-            <div className="text-muted font-mono" style={{ fontSize: '0.7rem' }}>
-              {gameState.phase === 'phase2' ? 'No limits · Winner takes all · 0 tokens = eliminated' : 'Queue match ±3 range · +1/-1 stakes · Timeout on 0 tokens'}
+      {/* Operation Command */}
+      <div className="panel-container border-2 border-heist-red p-4 flex flex-col xl:flex-row items-center justify-between relative z-10 gap-4">
+        <div className="flex items-center gap-4 w-full xl:w-auto justify-center xl:justify-start">
+          <div className="w-16 h-16 border border-heist-red rounded-full flex items-center justify-center p-2 flex-shrink-0">
+            <VenetianMask className="text-heist-red" size={36} />
+          </div>
+          <div className="flex flex-col">
+            <h2 className="heist-font text-white text-3xl leading-none tracking-wider">OPERATION</h2>
+            <h2 className="heist-font text-white text-3xl leading-none tracking-wider">COMMAND</h2>
+          </div>
+        </div>
+        <div className="flex flex-col items-center xl:items-end gap-3 w-full xl:w-auto">
+          <div className="flex flex-wrap justify-center xl:justify-end gap-2 w-full">
+            <button
+              className={`px-6 py-2 heist-font text-xl tracking-wider min-w-[120px] transition-colors ${gameState.isPaused || !gameState.isGameActive ? 'bg-heist-red text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+              onClick={stopGame}
+            >
+              ON HOLD
+            </button>
+            <button className="px-6 py-2 bg-heist-teal text-black heist-font text-xl tracking-wider flex items-center gap-2 min-w-[120px]">
+              PHASE {gameState.phase === 'phase2' ? '2' : '1'} <Banknote size={20} />
+            </button>
+            <button
+              className={`px-6 py-2 heist-font text-xl tracking-wider flex items-center gap-2 min-w-[160px] transition-colors ${gameState.isGameActive && !gameState.isPaused ? 'bg-heist-yellow text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+              onClick={startGame}
+            >
+              EXECUTE PLAN <Lock size={20} />
+            </button>
+          </div>
+          <div className="flex gap-2 relative mt-2 xl:mt-0">
+            <button
+              className="border border-heist-red text-heist-red px-6 py-1 heist-font text-lg hover:bg-heist-red hover:text-black transition-colors"
+              onClick={() => { if (window.confirm('Reset?')) resetGame(); }}
+            >
+              RESET PARAMETERS
+            </button>
+            <span className="absolute -bottom-3 -right-2 bg-heist-red text-black text-[10px] heist-font px-1 transform rotate-6 border border-black shadow-sm flex items-center gap-1">
+              <AlertTriangle size={10} /> CONFIRM!
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Phase Status */}
+      <div className="panel-container border-2 border-heist-teal p-4 flex flex-col md:flex-row justify-between items-center relative z-10 gap-4 mt-2">
+        <div className="flex items-center gap-4 w-full">
+          <Zap className="text-heist-teal flex-shrink-0" size={32} />
+          <div className="flex flex-col">
+            <div className="heist-font text-2xl tracking-wider text-white">
+              {gameState.phase === 'phase2' ? 'PHASE 2 — WAGER MODE' : 'PHASE 1 — INFILTRATION'}
+            </div>
+            <div className="heist-mono text-sm text-gray-400 mt-1">
+              Queue match: Vault 13A infiltration. Stake: {gameState.phase === 'phase2' ? 'Winner takes all' : '+1/-1 TKN'}. Timeout: {gameState.timeoutDurationOverride ? gameState.timeoutDurationOverride / 60000 : 15} minutes.
             </div>
           </div>
         </div>
-        <button className={`btn ${gameState.phase === 'phase2' ? 'btn-danger' : 'btn-ghost'}`} onClick={togglePhase} style={{ minWidth: '140px', justifyContent: 'center' }}>
-          {gameState.phase === 'phase2' ? '🔥 PHASE 2 ACTIVE' : 'SWITCH TO PHASE 2'}
+        <button
+          className="bg-heist-teal text-black px-6 py-2 heist-font text-xl flex items-center justify-center gap-2 hover:bg-white transition-colors w-full md:w-auto flex-shrink-0"
+          onClick={togglePhase}
+        >
+          {gameState.phase === 'phase2' ? 'REVERT PHASE' : 'INITIATE PHASE 2'} <Bomb size={20} />
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="admin-tabs">
+      <div className="flex gap-1 mt-4 relative z-10 flex-wrap">
         {tabs.map(t => (
-          <button key={t.id} className={`admin-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            className={`flex-1 min-w-[120px] py-3 heist-font text-xl tracking-wider border-2 flex items-center justify-center gap-2 transition-colors ${tab === t.id ? 'bg-heist-yellow text-black border-heist-yellow' : 'bg-[#151515] text-gray-400 border-[#222] hover:bg-[#222]'}`}
+            onClick={() => setTab(t.id)}
+          >
             {t.icon} {t.label}
-            {t.count > 0 && <span className="tab-badge">{t.count}</span>}
           </button>
         ))}
       </div>
 
-      {/* TAB: TEAMS */}
-      {tab === 'teams' && (
-        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-          <div className="card" style={{ padding: '1.5rem' }}>
-            <h3 className="font-heading text-survival" style={{ marginBottom: '1.25rem', fontSize: '1.5rem' }}>CREATE TEAM</h3>
-            <form onSubmit={handleCreateTeam} className="flex-col gap-3">
-              <div className="flex-col gap-1">
-                <label className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Team Name</label>
-                <input className="input" value={teamName} onChange={e => setTeamName(e.target.value)} placeholder="e.g. CodeBreakers" required />
-              </div>
-              <div className="flex-col gap-1">
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Password</label>
-                <input className="input" value={teamPassword} onChange={e => setTeamPassword(e.target.value)} placeholder="Login password" required />
-              </div>
-              <div className="flex-col gap-1">
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Members ({memberNames.length}/4)</label>
-                <div className="flex gap-2">
-                  <input className="input" value={memberInput} onChange={e => setMemberInput(e.target.value)} placeholder="Member name" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addMember(); } }} />
-                  <button type="button" className="btn btn-ghost" onClick={addMember} disabled={memberNames.length >= 4}><Plus size={16} /></button>
-                </div>
-                <div className="flex flex-wrap gap-2" style={{ marginTop: '0.5rem' }}>
-                  {memberNames.map((m, i) => (
-                    <div key={i} className="flex items-center gap-1" style={{ padding: '0.3rem 0.6rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '0.85rem' }}>
-                      {m} <button type="button" onClick={() => removeMember(i)} style={{ background: 'none', border: 'none', color: 'var(--accent-danger)', cursor: 'pointer', padding: 0 }}><X size={12} /></button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {memberNames.length >= 2 && (
-                <div className="flex-col gap-1">
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Select Leader</label>
-                  <select className="input" value={leader} onChange={e => setLeader(e.target.value)} required>
-                    <option value="">Choose leader...</option>
-                    {memberNames.map((m, i) => <option key={i} value={m}>{m}</option>)}
-                  </select>
-                </div>
-              )}
-              <button type="submit" className="btn btn-primary" disabled={!teamName || memberNames.length < 2 || !leader || !teamPassword}><Plus size={16} /> Create Team</button>
-            </form>
-          </div>
+      {/* Main Content Area */}
+      <div className="relative z-10 flex-1 min-h-[500px]">
 
-          <div className="card" style={{ padding: '1.5rem' }}>
-            <h3 className="font-heading" style={{ marginBottom: '1.25rem', fontSize: '1.5rem' }}>ALL TEAMS ({teams.length})</h3>
-            <div className="flex-col gap-2" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-              {teams.length === 0 && <p className="text-muted font-mono">No teams found.</p>}
-              {teams.map(t => (
-                editingTeam?.id === t.id ? (
-                  <div key={t.id} style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--accent-survival)' }}>
-                    <div className="flex-col gap-2">
-                      <input className="input" value={editingTeam.name} onChange={e => setEditingTeam({...editingTeam, name: e.target.value})} />
-                      <input className="input" value={editingTeam.password} onChange={e => setEditingTeam({...editingTeam, password: e.target.value})} />
-                      <input className="input" type="number" value={editingTeam.tokens} onChange={e => setEditingTeam({...editingTeam, tokens: Number(e.target.value)})} />
-                      <div className="flex gap-2 mt-2">
-                        <button className="btn btn-success" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => { editTeam(editingTeam); setEditingTeam(null); }}>Save</button>
-                        <button className="btn btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setEditingTeam(null)}>Cancel</button>
+        {/* TEAMS TAB */}
+        {tab === 'teams' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+            {/* Left Panel - Create */}
+            <div className="panel-container border-2 border-heist-teal p-6 relative overflow-hidden flex flex-col">
+              <Fingerprint className="absolute -right-10 top-10 w-64 h-64 text-heist-teal opacity-10 pointer-events-none" />
+              <h3 className="heist-font text-heist-teal text-3xl mb-2 tracking-wider">ASSIGN PROFILE</h3>
+              <p className="heist-mono text-gray-400 text-xs uppercase mb-6">One crew per predefined avatar, or use Custom with default profile.</p>
+              <form onSubmit={handleCreateTeam} className="flex flex-col gap-5 relative z-10">
+                <div className="flex flex-col gap-1">
+                  <label className="heist-font text-heist-teal tracking-widest text-lg">PROFILE NAME</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[320px] overflow-y-auto pr-1">
+                    {PROFILE_AVATARS.map((profile) => {
+                      const isSelected = selectedProfile === profile.name;
+                      const isAssigned = assignedProfiles.has(profile.name);
+
+                      return (
+                        <button
+                          key={profile.name}
+                          type="button"
+                          onClick={() => setSelectedProfile(profile.name)}
+                          className={`border text-left p-2 transition-all ${isSelected ? 'border-heist-yellow bg-heist-yellow bg-opacity-10' : isAssigned ? 'border-heist-teal bg-black bg-opacity-70 hover:border-white' : 'border-gray-700 bg-black bg-opacity-50 hover:border-heist-teal'}`}
+                        >
+                          <div className="w-full aspect-square rounded-full overflow-hidden border border-gray-700 mb-2 bg-black">
+                            <img src={profile.src} alt={profile.label} className="w-full h-full object-cover" />
+                          </div>
+                          <div className="heist-font text-sm tracking-widest text-white leading-none">{profile.label}</div>
+                          <div className={`heist-mono text-[10px] uppercase mt-1 ${isAssigned ? 'text-heist-yellow' : 'text-gray-500'}`}>
+                            {isAssigned ? 'Configured' : 'Available'}
+                          </div>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProfile(CUSTOM_PROFILE_VALUE)}
+                      className={`border text-left p-2 transition-all ${selectedProfile === CUSTOM_PROFILE_VALUE ? 'border-heist-yellow bg-heist-yellow bg-opacity-10' : 'border-gray-700 bg-black bg-opacity-50 hover:border-heist-teal'}`}
+                    >
+                      <div className="w-full aspect-square rounded-full overflow-hidden border border-gray-700 mb-2 bg-black">
+                        <img src={getProfileAvatar(DEFAULT_PROFILE_NAME)} alt="Custom Team" className="w-full h-full object-cover" />
                       </div>
-                    </div>
+                      <div className="heist-font text-sm tracking-widest text-white leading-none">Custom</div>
+                      <div className="heist-mono text-[10px] uppercase mt-1 text-gray-500">Default Avatar</div>
+                    </button>
                   </div>
-                ) : (
-                  <div key={t.id} style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex items-center gap-4">
-                        <span className="font-heading" style={{ fontSize: '18px', color: t.status === 'eliminated' ? 'var(--accent-danger)' : t.status === 'timeout' ? 'var(--accent-warning)' : 'inherit' }}>{t.name}</span>
-                        <span className={`badge badge-${t.status === 'eliminated' ? 'danger' : t.status === 'idle' ? 'survival' : t.status === 'fighting' ? 'danger' : t.status === 'timeout' ? 'warning' : t.status === 'queued' || t.status === 'matched' ? 'cyan' : 'warning'}`}>
+                </div>
+                {selectedProfile === CUSTOM_PROFILE_VALUE && (
+                  <div className="flex flex-col gap-1">
+                    <label className="heist-font text-heist-teal tracking-widest text-lg">TEAM NAME</label>
+                    <input className="input-heist" value={customTeamName} onChange={e => setCustomTeamName(e.target.value)} placeholder="e.g., phoenix_squad" />
+                  </div>
+                )}
+                <div className="flex flex-col gap-1">
+                  <label className="heist-font text-heist-teal tracking-widest text-lg">PASSWORD</label>
+                  <input className="input-heist" value={teamPassword} onChange={e => setTeamPassword(e.target.value)} placeholder="e.g., Secret Passcode (use non-alphanumeric char)" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="heist-font text-heist-teal tracking-widest text-lg">MEMBERS ({memberNames.length}/4)</label>
+                  <div className="flex gap-2">
+                    <input className="input-heist" value={memberInput} onChange={e => setMemberInput(e.target.value)} placeholder="Add member name" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addMember(); } }} />
+                    <button type="button" onClick={addMember} className="bg-[#ccc] text-black w-12 flex items-center justify-center font-bold text-2xl hover:bg-white transition-colors" disabled={memberNames.length >= 4}>+</button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {memberNames.map((member, idx) => (
+                      <div key={member} className="heist-mono text-sm border border-gray-600 px-2 py-1 flex items-center gap-2 bg-black bg-opacity-50">
+                        {member} <X size={14} className="cursor-pointer text-heist-red hover:text-white" onClick={() => removeMember(idx)} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {memberNames.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <label className="heist-font text-heist-teal tracking-widest text-lg">SELECT LEADER</label>
+                    <select className="input-heist cursor-pointer bg-black" value={leader} onChange={e => setLeader(e.target.value)}>
+                      <option value="">Choose Leader...</option>
+                      {memberNames.map((member) => <option key={member} value={member}>{member}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div className="heist-mono text-[11px] text-gray-500 uppercase border border-gray-800 bg-black bg-opacity-60 p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-700 bg-black flex-shrink-0">
+                      <img src={selectedProfileAvatar} alt={selectedProfileLabel} className="w-full h-full object-cover" />
+                    </div>
+                    <span>Selected: <span className="text-white">{selectedProfileLabel}</span></span>
+                  </div>
+                </div>
+                <button type="submit" className="mt-4 bg-[#bbb] text-black py-3 heist-font text-xl tracking-wider flex items-center justify-center gap-2 hover:bg-white transition-colors disabled:opacity-50" disabled={(selectedProfile === CUSTOM_PROFILE_VALUE ? !customTeamName.trim() : !selectedProfile || assignedProfiles.has(selectedProfile)) || !teamPassword || memberNames.length < 1 || !leader}>
+                  + CREATE TEAM <Wallet size={20} />
+                </button>
+              </form>
+            </div>
+
+            {/* Right Panel - List */}
+            <div className="panel-container border-2 border-[#333] p-6 relative overflow-hidden flex flex-col bg-blueprint">
+              <h3 className="heist-font text-white text-3xl mb-6 tracking-wider relative z-10">ALL RECRUITS ({teams.length})</h3>
+
+              <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-3 relative z-10">
+                {teams.length === 0 && (
+                  <div className="heist-mono text-gray-400 mt-4">
+                    No members recruited yet. Awaiting briefing.
+                  </div>
+                )}
+                {teams.map(t => (
+                  <div key={t.id} className="border border-gray-700 bg-black bg-opacity-80 p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 hover:border-gray-500 transition-colors">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-700 bg-black flex-shrink-0">
+                          <img src={t.avatarSrc} alt={getProfileLabel(t.name)} className="w-full h-full object-cover" />
+                        </div>
+                        <span className={`heist-font text-2xl tracking-wider ${t.status === 'eliminated' ? 'text-heist-red line-through' : t.status === 'timeout' ? 'text-gray-500' : 'text-white'}`}>{t.name}</span>
+                        <span className={`heist-mono text-[10px] px-1 py-0.5 border ${t.status === 'eliminated' ? 'border-heist-red text-heist-red' : t.status === 'idle' ? 'border-heist-yellow text-heist-yellow' : t.status === 'fighting' ? 'border-heist-red bg-heist-red text-white' : 'border-gray-500 text-gray-400'}`}>
                           {t.status.toUpperCase()}
                         </span>
                         {t.status === 'timeout' && t.timeoutUntil && <TimeoutDisplay timeoutUntil={t.timeoutUntil} />}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="badge badge-survival">{t.tokens} TKN</span>
-                        <button className="btn btn-ghost" style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem' }} onClick={() => setEditingTeam(t)}>Edit</button>
-                        <button className="btn btn-ghost" style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem' }} onClick={() => updateTokens(t.id, 1, 'Admin +1')}>+1</button>
-                        <button className="btn btn-ghost" style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem' }} onClick={() => updateTokens(t.id, -1, 'Admin -1')}>-1</button>
-                        <button className="btn btn-danger" style={{ padding: '0.2rem 0.4rem' }} onClick={() => deleteTeam(t.id)}><X size={12} /></button>
+                      <span className="heist-mono text-xs text-gray-400 mt-1">L: {t.leader} | {t.memberNames?.filter(m => m !== t.leader).join(', ')}</span>
+                    </div>
+                    <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto border-t border-gray-800 sm:border-0 pt-3 sm:pt-0">
+                      <span className="heist-font text-heist-yellow text-2xl">{t.tokens} TKN</span>
+                      <div className="flex items-center gap-1 bg-[#111] p-1 border border-gray-800">
+                        <button onClick={() => updateTokens(t.id, 1, 'Admin')} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-heist-yellow hover:bg-gray-800 transition-colors">+</button>
+                        <button onClick={() => updateTokens(t.id, -1, 'Admin')} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-heist-red hover:bg-gray-800 transition-colors">-</button>
+                        <button onClick={() => deleteTeam(t.id)} className="w-8 h-8 flex items-center justify-center text-heist-red hover:bg-heist-red hover:text-white transition-colors ml-1"><X size={16} /></button>
                       </div>
                     </div>
-                    <div className="text-muted font-mono" style={{ fontSize: '0.8rem' }}>Leader: <span className="text-survival">{t.leader}</span> · {t.memberNames?.join(', ')}</div>
                   </div>
-                )
-              ))}
+                ))}
+              </div>
+              <div className="absolute bottom-10 right-10 opacity-[0.03] pointer-events-none">
+                <div className="heist-mono text-sm text-center mb-2">Royal Mint's security grid</div>
+                <Map size={200} />
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* TAB: QUEUE */}
-      {tab === 'queue' && (
-        <div className="card" style={{ padding: '1.5rem' }}>
-          <h3 className="font-heading" style={{ marginBottom: '1rem', fontSize: '1.5rem' }}>MATCHMAKING QUEUE</h3>
+        {/* QUEUE TAB (PLANS) */}
+        {tab === 'queue' && (
+          <div className="panel-container border-2 border-[#333] p-6 h-full flex flex-col bg-blueprint">
+            <h3 className="heist-font text-white text-3xl mb-6 tracking-wider">MATCHMAKING PLANS</h3>
 
-          {/* Matched Pairs */}
-          {queuePairs.length > 0 && (
-            <>
-              <h4 className="font-heading text-survival" style={{ marginBottom: '0.75rem', fontSize: '1.25rem' }}>MATCHED PAIRS — Ready for Match</h4>
-              {queuePairs.map((pair, i) => (
-                <div key={i} style={{ padding: '1.5rem', background: 'rgba(105, 255, 117, 0.05)', border: '1px solid rgba(105, 255, 117, 0.2)', marginBottom: '1rem' }}>
-                  <div className="font-heading" style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>
-                    {pair.teamAName} <span className="text-danger">VS</span> {pair.teamBName}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto pr-2 pb-10">
+              {/* Ready Pairs */}
+              <div className="flex flex-col gap-4">
+                <h4 className="heist-font text-heist-yellow text-2xl tracking-wider border-b border-gray-700 pb-2">READY TO EXECUTE</h4>
+                {queuePairs.length === 0 && <div className="heist-mono text-gray-500">No ready pairs currently.</div>}
+                {queuePairs.map((pair, i) => (
+                  <div key={i} className="border border-heist-yellow bg-black bg-opacity-80 p-4">
+                    <div className="heist-font text-2xl text-center mb-4 flex items-center justify-center gap-4">
+                      <span className="text-white">{pair.teamAName}</span>
+                      <span className="text-heist-red">VS</span>
+                      <span className="text-white">{pair.teamBName}</span>
+                    </div>
+                    <div className="flex justify-center border-t border-gray-800 pt-4">
+                      <DomainWheel domains={domains} onSpin={(domain) => createMatch(pair.teamAId, pair.teamBId, domain)} />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <DomainWheel domains={domains} onSpin={(domain) => {
-                      createMatch(pair.teamAId, pair.teamBId, domain);
-                    }} />
-                  </div>
+                ))}
+              </div>
+
+              {/* Waiting Queue */}
+              <div className="flex flex-col gap-4">
+                <div className="flex justify-between items-end border-b border-gray-700 pb-2">
+                  <h4 className="heist-font text-heist-teal text-2xl tracking-wider m-0">AWAITING ASSIGNMENT ({waitingQueue.length})</h4>
+                  {gameState.isGameActive && (
+                    <button className="heist-mono text-xs border border-gray-600 px-2 py-1 hover:bg-gray-800" onClick={enrollAllEligible}>
+                      FORCE RE-ENROLL
+                    </button>
+                  )}
                 </div>
-              ))}
-            </>
-          )}
-
-          {/* Waiting in Queue */}
-          <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
-            <div style={{ padding: '0.75rem', background: 'rgba(255,51,102,0.06)', border: '1px solid rgba(255,51,102,0.2)', borderRadius: '8px' }}>
-              <div className="text-muted font-mono" style={{ fontSize: '0.72rem' }}>LIVE TEAMS FIGHTING</div>
-              <div className="font-heading text-danger" style={{ fontSize: '1.4rem' }}>{fightingTeams.length}</div>
-            </div>
-            <div style={{ padding: '0.75rem', background: 'rgba(121, 255, 214, 0.06)', border: '1px solid rgba(121,255,214,0.2)', borderRadius: '8px' }}>
-              <div className="text-muted font-mono" style={{ fontSize: '0.72rem' }}>TEAM ONLINE (SEARCHING)</div>
-              <div className="font-heading text-cyan" style={{ fontSize: '1.4rem' }}>{waitingQueue.length}</div>
-            </div>
-            <div style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }}>
-              <div className="text-muted font-mono" style={{ fontSize: '0.72rem' }}>ALL TEAMS</div>
-              <div className="font-heading" style={{ fontSize: '1.4rem' }}>{teams.length}</div>
-            </div>
-          </div>
-
-          <h4 className="font-heading text-danger" style={{ marginTop: '1rem', marginBottom: '0.75rem', fontSize: '1.1rem' }}>LIVE FIGHTING ({fightingTeams.length})</h4>
-          {fightingTeams.map((t) => (
-            <div key={t.id} className="flex justify-between items-center" style={{ padding: '0.75rem', background: 'rgba(255,51,102,0.04)', border: '1px solid rgba(255,51,102,0.2)', marginBottom: '0.5rem' }}>
-              <div>
-                <span className="font-heading" style={{ fontSize: '1.05rem' }}>{t.name}</span>
-                <span className="badge badge-survival" style={{ marginLeft: '0.5rem' }}>{t.tokens} TKN</span>
-              </div>
-              <span className="badge badge-danger">FIGHTING</span>
-            </div>
-          ))}
-          {fightingTeams.length === 0 && <p className="text-muted font-mono" style={{ marginBottom: '0.75rem' }}>No teams are currently fighting.</p>}
-
-          <h4 className="font-heading text-warning" style={{ marginTop: '1rem', marginBottom: '0.75rem', fontSize: '1.1rem' }}>TEAM ONLINE (SEARCHING) ({waitingQueue.length})</h4>
-          {queueDiagnostics.map(q => (
-            <div key={q.teamId} style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', marginBottom: '0.5rem', borderRadius: '8px' }}>
-              <div className="flex justify-between items-center" style={{ marginBottom: '0.5rem' }}>
-                <div>
-                  <span className="font-heading" style={{ fontSize: '1.1rem' }}>{q.teamName}</span>
-                  <span className="badge badge-survival" style={{ marginLeft: '0.5rem' }}>{q.tokens} TKN</span>
-                </div>
-                <span className={`badge ${q.hasAnyPossibleMatch ? 'badge-cyan' : 'badge-warning'}`}>{q.hasAnyPossibleMatch ? 'SEARCHING...' : 'BLOCKED'}</span>
-              </div>
-
-              {q.blockers.length === 0 && (
-                <div className="text-muted font-mono" style={{ fontSize: '0.75rem' }}>Waiting for another team to join queue.</div>
-              )}
-
-              {q.blockers.map((b) => (
-                <div key={b.teamId} style={{ marginTop: '0.45rem', padding: '0.45rem 0.6rem', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px' }}>
-                  <div className="font-mono" style={{ fontSize: '0.78rem' }}>
-                    vs <span style={{ color: 'var(--text-main)' }}>{b.teamName}</span>: {b.canMatchNow ? 'Eligible now' : b.reasons.join(' | ')}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
-
-          <h4 className="font-heading" style={{ marginTop: '1rem', marginBottom: '0.75rem', fontSize: '1.1rem' }}>ALL TEAMS SNAPSHOT</h4>
-          {teams.map((t) => (
-            <div key={t.id} className="flex justify-between items-center" style={{ padding: '0.6rem 0.75rem', background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-subtle)', marginBottom: '0.4rem', borderRadius: '8px' }}>
-              <div>
-                <span className="font-heading" style={{ fontSize: '1rem' }}>{t.name}</span>
-                <span className="badge badge-survival" style={{ marginLeft: '0.5rem' }}>{t.tokens} TKN</span>
-              </div>
-              <span className={`badge badge-${t.status === 'eliminated' ? 'danger' : t.status === 'idle' ? 'survival' : t.status === 'fighting' ? 'danger' : t.status === 'timeout' ? 'warning' : 'cyan'}`}>{t.status.toUpperCase()}</span>
-            </div>
-          ))}
-
-          {(matchmakingQueue || []).length === 0 && <p className="text-muted font-mono">No teams in queue.</p>}
-        </div>
-      )}
-
-      {/* TAB: FIGHTING */}
-      {tab === 'fighting' && (
-        <div className="card" style={{ padding: '1.5rem' }}>
-          <h3 className="font-heading" style={{ marginBottom: '1rem', fontSize: '1.5rem' }}>ACTIVE MATCHES</h3>
-          {activeMatches.length === 0 && <p className="text-muted font-mono">No active matches.</p>}
-          {activeMatches.map(m => (
-            <div key={m.id} style={{ padding: '1.5rem', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.3)', marginBottom: '1rem' }}>
-              <div className="flex justify-between items-center" style={{ marginBottom: '1rem' }}>
-                <div className="flex items-center gap-2">
-                  <span className="badge badge-danger">LIVE</span>
-                  <span className="badge badge-survival">{m.domain}</span>
-                  {m.isWager && <span className="badge badge-magenta">WAGER</span>}
-                </div>
-                <MatchTimer startTime={m.startTime} />
-              </div>
-
-              {m.domain === 'TBD' && (
-                <div style={{ marginBottom: '1rem', padding: '1rem', background: 'rgba(255, 201, 77, 0.05)', border: '1px solid var(--accent-warning)' }}>
-                  <div className="text-warning font-mono mb-2" style={{ fontSize: '0.8rem' }}>⚡ Spin wheel to assign domain</div>
-                  <DomainWheel
-                    domains={domains}
-                    resolveDomain={(selectedDomain) => handleSpinForMatch(m.id, selectedDomain)}
-                    onSpin={(domain, payload) => {
-                      const finalDomain = payload?.domain || domain;
-                      setSpinResults(prev => ({ ...prev, [m.id]: finalDomain }));
-                    }}
-                  />
-                </div>
-              )}
-
-              <div className="grid font-heading" style={{ gridTemplateColumns: '1fr auto 1fr', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div className="text-center"><div style={{ fontSize: '1.8rem' }}>{m.teamA.name}</div><div className="badge badge-survival">{m.teamA.tokens} TKN</div></div>
-                <div style={{ fontSize: '2rem', color: 'var(--accent-danger)' }}>VS</div>
-                <div className="text-center"><div style={{ fontSize: '1.8rem' }}>{m.teamB.name}</div><div className="badge badge-survival">{m.teamB.tokens} TKN</div></div>
-              </div>
-              <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={() => declareWinner(m.id, m.teamA.id)}><Trophy size={16} /> {m.teamA.name} WINS</button>
-                <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={() => declareWinner(m.id, m.teamB.id)}><Trophy size={16} /> {m.teamB.name} WINS</button>
-              </div>
-            </div>
-          ))}
-
-          {matchHistory.length > 0 && (
-            <>
-              <h4 className="font-heading" style={{ marginTop: '1.5rem', marginBottom: '0.75rem', color: 'var(--text-muted)', fontSize: '1.25rem' }}>MATCH HISTORY</h4>
-              {matchHistory.slice(0, 8).map(h => (
-                <div key={h.id} className="flex justify-between items-center font-mono" style={{ padding: '0.6rem', background: 'rgba(255,255,255,0.02)', fontSize: '0.85rem', marginBottom: '0.4rem', borderLeft: '2px solid var(--border-subtle)' }}>
-                  <div><span className="text-survival" style={{ fontWeight: 700 }}>{h.winner}</span> beat <span className="text-danger">{h.loser}</span> in {h.domain}</div>
-                  <span className={`badge ${h.isWager ? 'badge-magenta' : 'badge-warning'}`}>{h.isWager ? 'WAGER' : '±1'}</span>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* TAB: SETTINGS */}
-      {tab === 'settings' && (
-        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-          <div className="card" style={{ padding: '1.5rem' }}>
-            <h3 className="font-heading text-survival" style={{ marginBottom: '1.25rem', fontSize: '1.5rem' }}>MANAGE DOMAINS</h3>
-            <div className="flex-col gap-3">
-              <div className="flex gap-2">
-                <input className="input" value={domainInput} onChange={e => setDomainInput(e.target.value)} placeholder="New Domain Name" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (domainInput.trim() && !domains.includes(domainInput.trim())) { updateDomains([...domains, domainInput.trim()]); setDomainInput(''); } } }} />
-                <button type="button" className="btn btn-primary" onClick={() => { if (domainInput.trim() && !domains.includes(domainInput.trim())) { updateDomains([...domains, domainInput.trim()]); setDomainInput(''); } }}><Plus size={16} /> Add</button>
-              </div>
-              <div className="flex-col gap-2 mt-2" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                {domains.map((d, i) => (
-                  <div key={i} className="flex justify-between items-center" style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                    <span className="font-heading" style={{ fontSize: '1.1rem' }}>{d}</span>
-                    <button className="btn btn-danger" style={{ padding: '0.3rem 0.6rem' }} onClick={() => updateDomains(domains.filter((_, idx) => idx !== i))}><X size={14} /></button>
+                {queueDiagnostics.length === 0 && <div className="heist-mono text-gray-500">Queue is empty.</div>}
+                {queueDiagnostics.map(q => (
+                  <div key={q.teamId} className="border border-gray-700 bg-black bg-opacity-60 p-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="heist-font text-xl text-white">{q.teamName} <span className="text-heist-yellow text-sm ml-2">{q.tokens} TKN</span></span>
+                      <span className={`heist-mono text-[10px] px-1 py-0.5 border ${q.hasAnyPossibleMatch ? 'border-heist-teal text-heist-teal' : 'border-gray-500 text-gray-400'}`}>
+                        {q.hasAnyPossibleMatch ? 'SEARCHING' : 'BLOCKED'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1 mt-2 border-t border-gray-800 pt-2">
+                      {q.blockers.length === 0 ? (
+                        <div className="heist-mono text-xs text-gray-500">Waiting for opponents...</div>
+                      ) : (
+                        q.blockers.slice(0, 3).map((b) => (
+                          <div key={b.teamId} className="heist-mono text-[11px] flex justify-between">
+                            <span className="text-gray-400">vs {b.teamName}</span>
+                            <span className={b.canMatchNow ? 'text-heist-yellow' : 'text-heist-red'}>{b.canMatchNow ? 'Ready' : b.reasons[0]}</span>
+                          </div>
+                        ))
+                      )}
+                      {q.blockers.length > 3 && <div className="heist-mono text-[10px] text-gray-600 mt-1">+{q.blockers.length - 3} more blockers</div>}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           </div>
-          <div className="card" style={{ padding: '1.5rem' }}>
-            <h3 className="font-heading text-warning" style={{ marginBottom: '1.25rem', fontSize: '1.5rem' }}>TIMEOUT DURATION</h3>
-            <div className="flex-col gap-3">
-              <div className="text-muted font-mono" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                Set custom timeout duration in minutes. Currently: {gameState.timeoutDurationOverride ? (gameState.timeoutDurationOverride / 60000) + ' min (Overridden)' : 'Dynamic (5 or 15 min)'}
+        )}
+
+        {/* FIGHTING TAB (VAULTS) */}
+        {tab === 'fighting' && (
+          <div className="panel-container border-2 border-heist-red p-6 h-full flex flex-col bg-blueprint">
+            <h3 className="heist-font text-heist-red text-3xl mb-6 tracking-wider">ACTIVE MISSIONS ({activeMatches.length})</h3>
+
+            <div className="flex-1 overflow-y-auto pr-2 pb-10">
+              {activeMatches.length === 0 && <div className="heist-mono text-gray-500">No operations currently active.</div>}
+
+              <div className="flex flex-col gap-6">
+                {activeMatches.map(m => (
+                  <div key={m.id} className="border-2 border-heist-red bg-black bg-opacity-80 p-1 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-full h-1 bg-heist-red opacity-50"></div>
+
+                    <div className="bg-[#111] p-4 flex flex-col gap-4 relative z-10">
+                      <div className="flex justify-between items-center border-b border-gray-800 pb-3">
+                        <div className="flex gap-3 items-center">
+                          <span className="heist-mono text-xs bg-heist-red text-white px-2 py-1 animate-pulse">LIVE</span>
+                          <span className="heist-font text-xl tracking-widest text-white">{m.domain}</span>
+                          {m.isWager && <span className="heist-mono text-xs border border-heist-teal text-heist-teal px-2 py-1">WAGER</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="text-gray-400" size={16} />
+                          <MatchTimer startTime={m.startTime} />
+                        </div>
+                      </div>
+
+                      {m.domain === 'TBD' && (
+                        <div className="py-4 flex flex-col items-center">
+                          <div className="heist-mono text-heist-yellow text-sm mb-4">ASSIGN DOMAIN TO BEGIN</div>
+                          <DomainWheel
+                            domains={domains}
+                            resolveDomain={(selectedDomain) => handleSpinForMatch(m.id, selectedDomain)}
+                            onSpin={() => { }}
+                          />
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center py-4">
+                        <div className="flex flex-col items-center text-center gap-2">
+                          <span className="heist-font text-3xl text-white break-all">{m.teamA.name}</span>
+                          <span className="heist-font text-heist-yellow text-xl">{m.teamA.tokens} TKN</span>
+                          <button onClick={() => declareWinner(m.id, m.teamA.id)} className="mt-2 border border-heist-teal text-heist-teal hover:bg-heist-teal hover:text-black px-4 py-2 heist-font tracking-widest transition-colors w-full">
+                            DECLARE WINNER
+                          </button>
+                        </div>
+
+                        <div className="flex flex-col items-center justify-center">
+                          <VenetianMask className="text-heist-red opacity-30" size={40} />
+                          <span className="heist-font text-heist-red text-2xl mt-2">VS</span>
+                        </div>
+
+                        <div className="flex flex-col items-center text-center gap-2">
+                          <span className="heist-font text-3xl text-white break-all">{m.teamB.name}</span>
+                          <span className="heist-font text-heist-yellow text-xl">{m.teamB.tokens} TKN</span>
+                          <button onClick={() => declareWinner(m.id, m.teamB.id)} className="mt-2 border border-heist-teal text-heist-teal hover:bg-heist-teal hover:text-black px-4 py-2 heist-font tracking-widest transition-colors w-full">
+                            DECLARE WINNER
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex gap-2">
-                <input className="input" type="number" value={timeoutInput} onChange={e => setTimeoutInput(e.target.value)} placeholder="Minutes (e.g. 10)" />
-                <button type="button" className="btn btn-warning" onClick={() => { if (timeoutInput) { updateTimeout(Number(timeoutInput)); setTimeoutInput(''); } }}>Set Timeout</button>
+
+              {matchHistory.length > 0 && (
+                <div className="mt-8">
+                  <h4 className="heist-font text-gray-400 text-2xl tracking-wider border-b border-gray-800 pb-2 mb-4">OPERATION LOG</h4>
+                  <div className="flex flex-col gap-2">
+                    {matchHistory.slice(0, 5).map(h => (
+                      <div key={h.id} className="border-l-4 border-gray-600 bg-black bg-opacity-50 p-2 flex justify-between items-center heist-mono text-sm">
+                        <div>
+                          <span className="text-white">{h.winner}</span> <span className="text-gray-600">def.</span> <span className="text-heist-red line-through">{h.loser}</span> <span className="text-gray-600">in</span> <span className="text-heist-teal">{h.domain}</span>
+                        </div>
+                        <span className="text-gray-500">{h.isWager ? '[WAGER]' : '±1'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SETTINGS TAB (SCHEMATICS) */}
+        {tab === 'settings' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+            <div className="panel-container border-2 border-[#444] p-6 relative overflow-hidden">
+              <h3 className="heist-font text-white text-3xl mb-6 tracking-wider">DOMAIN SCHEMATICS</h3>
+              <div className="flex flex-col gap-4 relative z-10">
+                <div className="flex gap-2">
+                  <input
+                    className="input-heist"
+                    value={domainInput}
+                    onChange={e => setDomainInput(e.target.value)}
+                    placeholder="NEW DOMAIN"
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (domainInput.trim() && !domains.includes(domainInput.trim())) { updateDomains([...domains, domainInput.trim()]); setDomainInput(''); } } }}
+                  />
+                  <button className="bg-gray-700 text-white px-4 hover:bg-white hover:text-black transition-colors" onClick={() => { if (domainInput.trim() && !domains.includes(domainInput.trim())) { updateDomains([...domains, domainInput.trim()]); setDomainInput(''); } }}>
+                    <Plus size={20} />
+                  </button>
+                </div>
+                <div className="flex flex-col gap-2 mt-4 max-h-[300px] overflow-y-auto pr-2">
+                  {domains.map((d, i) => (
+                    <div key={i} className="flex justify-between items-center p-3 bg-black border border-gray-700">
+                      <span className="heist-mono text-white text-sm">{d}</span>
+                      <button className="text-gray-500 hover:text-heist-red transition-colors" onClick={() => updateDomains(domains.filter((_, idx) => idx !== i))}>
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="panel-container border-2 border-heist-yellow p-6 relative overflow-hidden">
+              <h3 className="heist-font text-heist-yellow text-3xl mb-6 tracking-wider">TIMEOUT PARAMETERS</h3>
+              <div className="flex flex-col gap-4 relative z-10">
+                <div className="heist-mono text-sm text-gray-300 bg-black bg-opacity-80 p-4 border-l-2 border-heist-yellow">
+                  Override default 0-token elimination timeout.<br /><br />
+                  CURRENT: <span className="text-heist-yellow">{gameState.timeoutDurationOverride ? (gameState.timeoutDurationOverride / 60000) + ' MIN' : 'DYNAMIC'}</span>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <input className="input-heist" type="number" value={timeoutInput} onChange={e => setTimeoutInput(e.target.value)} placeholder="MINUTES" />
+                  <button className="bg-heist-yellow text-black px-4 heist-font text-xl tracking-wider hover:bg-white transition-colors" onClick={() => { if (timeoutInput) { updateTimeout(Number(timeoutInput)); setTimeoutInput(''); } }}>
+                    SET
+                  </button>
+                </div>
                 {gameState.timeoutDurationOverride && (
-                  <button type="button" className="btn btn-ghost" onClick={() => updateTimeout(null)}>Reset to Default</button>
+                  <button className="border border-gray-600 text-gray-400 py-2 heist-font text-xl tracking-wider hover:bg-gray-800 transition-colors mt-2" onClick={() => updateTimeout(null)}>
+                    RESTORE DEFAULT
+                  </button>
                 )}
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Stats Bar */}
-      <div className="grid-12" style={{ gap: '16px' }}>
-        {[
-          { label: 'TEAMS', val: teams.length, color: 'var(--text-main)' },
-          { label: 'IN QUEUE', val: (matchmakingQueue || []).length, color: 'var(--accent-cyan)' },
-          { label: 'ACTIVE MATCHES', val: activeMatches.length, color: 'var(--accent-danger)' },
-          { label: 'PHASE', val: gameState.phase === 'phase2' ? '2' : '1', color: 'var(--accent-warning)' },
-        ].map((s, i) => (
-          <div key={i} className="card text-center" style={{ gridColumn: 'span 3', padding: '16px' }}>
-            <div className="text-muted font-mono" style={{ fontSize: '12px', marginBottom: '8px' }}>{s.label}</div>
-            <div className="tabular-nums font-heading" style={{ fontSize: '32px', color: s.color }}>{s.val}</div>
+      {/* Bottom Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-auto relative z-10">
+        <div className="panel-container border-t-2 border-gray-500 p-3 flex flex-col items-center justify-center gap-1">
+          <span className="heist-mono text-[10px] text-gray-400 tracking-widest uppercase">TOTAL CREW</span>
+          <div className="flex items-center gap-2">
+            <Users className="text-gray-400" size={24} />
+            <span className="heist-font text-3xl md:text-4xl text-gray-300">{teams.length}</span>
           </div>
-        ))}
+        </div>
+        <div className="panel-container border-t-2 border-heist-teal p-3 flex flex-col items-center justify-center gap-1">
+          <span className="heist-mono text-[10px] text-gray-400 tracking-widest uppercase">PLANS READY</span>
+          <div className="flex items-center gap-2">
+            <ScrollText className="text-heist-teal" size={24} />
+            <span className="heist-font text-3xl md:text-4xl text-heist-teal">{waitingQueue.length}</span>
+          </div>
+        </div>
+        <div className="panel-container border-t-2 border-heist-red p-3 flex flex-col items-center justify-center gap-1">
+          <span className="heist-mono text-[10px] text-gray-400 tracking-widest uppercase">ACTIVE MISSIONS</span>
+          <div className="flex items-center gap-2">
+            <Map className="text-heist-red" size={24} />
+            <span className="heist-font text-3xl md:text-4xl text-heist-red">{activeMatches.length}</span>
+          </div>
+        </div>
+        <div className="panel-container border-t-2 border-heist-yellow p-3 flex flex-col items-center justify-center gap-1">
+          <span className="heist-mono text-[10px] text-gray-400 tracking-widest uppercase">PHASE</span>
+          <div className="flex items-center gap-2">
+            <Crown className="text-heist-yellow" size={24} />
+            <span className="heist-font text-3xl md:text-4xl text-heist-yellow">{gameState.phase === 'phase2' ? '2' : '1'}</span>
+          </div>
+        </div>
       </div>
     </div>
   );

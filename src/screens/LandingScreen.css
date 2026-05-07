@@ -1,0 +1,661 @@
+/* Core Variables & Resets */
+:root {
+  --heist-red: #cc0000;
+  --heist-red-glow: rgba(204, 0, 0, 0.8);
+  --heist-gold: #cfa858;
+  --heist-gold-glow: rgba(207, 168, 88, 0.5);
+  --heist-black: #000000;
+  --heist-blue: #aaccff;
+  --heist-white: #e0e0e0;
+}
+
+body {
+  background-color: var(--heist-black);
+  margin: 0;
+  overflow-x: hidden;
+}
+
+.landing-container {
+  background-color: var(--heist-black);
+  color: var(--heist-white);
+  min-height: 100vh;
+  position: relative;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* Helpers */
+.text-gold { color: var(--heist-gold); }
+.text-red { color: var(--heist-red); }
+.text-blue { color: var(--heist-blue); }
+.glow-text { text-shadow: 0 0 10px currentColor; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-4 { margin-top: 1rem; }
+.mt-8 { margin-top: 2rem; }
+.mt-12 { margin-top: 3rem; }
+.mt-16 { margin-top: 4rem; }
+.mt-20 { margin-top: 5rem; }
+.z-10 { position: relative; z-index: 10; }
+
+.text-left-block,
+.text-right-block,
+.center-block,
+.center-block-bottom,
+.silhouettes,
+.system-logs-corner,
+.system-logs-flashing,
+.typewriter-box,
+.cta-container {
+  position: relative;
+  z-index: 10;
+}
+
+/* 0. PRELUDE — SILENCE */
+.prelude-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: var(--heist-black);
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
+
+.prelude-text {
+  font-family: 'Helvetica Neue', sans-serif;
+  font-weight: 200;
+  font-size: 1.5rem;
+  color: rgba(255, 255, 255, 0.7);
+  filter: blur(0.5px);
+  text-transform: lowercase;
+  opacity: 0;
+  animation: slowFadeIn 2s 1.2s forwards;
+}
+
+/* FIXED VAULT BACKGROUND */
+.vault-bg {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.vault-fog {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: linear-gradient(to bottom, transparent, var(--heist-black));
+  z-index: 1;
+  pointer-events: none;
+}
+
+.vault-light-rays {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: radial-gradient(circle at top, rgba(207, 168, 88, 0.1), transparent 60%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pitch-black-fade {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: var(--heist-black);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* CINEMATIC SECTIONS */
+.scroll-content {
+  position: relative;
+  z-index: 10;
+}
+
+.cinematic-section {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4rem;
+}
+
+/* Scroll Line Animations */
+.cinematic-line {
+  font-size: 2rem;
+  font-weight: 300;
+  opacity: 0;
+  transform: translateY(15px);
+  transition: all 1.5s ease-out;
+}
+.is-active .cinematic-line {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.is-active .line-1 { transition-delay: 0.2s; }
+.is-active .line-2 { transition-delay: 1.5s; }
+.is-active .line-3 { transition-delay: 2.8s; }
+.is-active .line-4 { transition-delay: 4.1s; }
+
+/* 1. AUDIO AWAKENS + TYPE INIT */
+.sec-init {
+  align-items: center;
+  background: var(--heist-black); /* Obscures vault initially */
+}
+
+.typewriter-box {
+  text-align: center;
+  position: relative;
+  height: 100px;
+}
+
+.init-type-1 {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 2rem;
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 2px solid rgba(255,255,255,0.7);
+  width: 0;
+  animation: typing 3s steps(40, end) forwards, blink-caret 0.75s step-end 6;
+}
+
+.init-glitch-replace {
+  position: absolute;
+  top: 0; left: 0; width: 100%;
+  opacity: 0;
+  animation: glitchReplace 0.5s 4s forwards;
+}
+
+.init-type-2 {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 2rem;
+}
+
+.init-type-sub {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.2rem;
+  color: #888;
+  margin-top: 1rem;
+  opacity: 0;
+  animation: slowFadeIn 2s 5s forwards;
+}
+
+.scroll-pulse-indicator {
+  position: absolute;
+  bottom: 40px;
+  opacity: 0;
+  animation: slowFadeIn 2s 6s forwards;
+}
+.arrow {
+  width: 2px;
+  height: 40px;
+  background: linear-gradient(transparent, #fff);
+  animation: arrowPulse 2s infinite;
+}
+
+/* 2. VAULT EMERGENCE */
+.sec-emergence {
+  justify-content: center;
+}
+.text-left-block { max-width: 600px; }
+
+/* 3. SYSTEM REVEAL (OVERLAY UI) */
+.sec-system-reveal {
+  align-items: flex-end;
+}
+.grid-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background-image: 
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  opacity: 0;
+  transition: opacity 2s;
+}
+.is-active .grid-overlay { opacity: 1; }
+
+.coords-overlay {
+  position: absolute;
+  top: 40px; left: 40px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.4);
+  opacity: 0;
+  z-index: 10;
+}
+.is-active .coords-overlay { opacity: 1; transition: opacity 2s 1s; }
+
+.nodes-container {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+}
+.sys-node {
+  position: absolute;
+  width: 4px; height: 4px;
+  background: var(--heist-white);
+  border-radius: 50%;
+  opacity: 0;
+  box-shadow: 0 0 10px #fff;
+}
+.is-active .n1 { top: 30%; left: 20%; animation: blinkNode 3s infinite 1s; opacity: 1; }
+.is-active .n2 { top: 60%; left: 70%; animation: blinkNode 2s infinite 1.5s; opacity: 1;}
+.is-active .n3 { top: 80%; left: 40%; animation: blinkNode 4s infinite 2s; opacity: 1;}
+.is-active .n4 { top: 20%; left: 80%; animation: blinkNode 2.5s infinite 2.5s; opacity: 1;}
+
+.text-right-block {
+  max-width: 600px;
+  text-align: right;
+}
+
+/* 4. MATCHMAKING VISUALIZATION */
+.sec-matchmaking {
+  align-items: center;
+}
+.darker-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6);
+}
+.center-block {
+  text-align: center;
+  z-index: 10;
+}
+
+.animated-system-lines {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+}
+.connecting-line {
+  position: absolute;
+  background: rgba(255,255,255,0.1);
+  opacity: 0;
+}
+.is-active .l1 { top: 40%; left: 0; height: 1px; width: 100%; animation: dataTransferX 4s infinite; opacity: 1; }
+.is-active .l2 { top: 0; left: 60%; width: 1px; height: 100%; animation: dataTransferY 3s infinite 1s; opacity: 1; }
+.is-active .l3 { top: 70%; left: 0; height: 1px; width: 100%; animation: dataTransferX 5s infinite 2s; opacity: 1; }
+
+.system-logs-corner {
+  position: absolute;
+  bottom: 40px; left: 40px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.6);
+}
+.log-msg { opacity: 0; margin-top: 4px; }
+.is-active .log-1 { animation: typeLog 0.1s forwards 1s; }
+.is-active .log-2 { animation: typeLog 0.1s forwards 3s; }
+.is-active .log-3 { animation: typeLog 0.1s forwards 5s; }
+
+/* 5. IDENTITY / MASK MOMENT */
+.sec-identity {
+  align-items: center;
+  justify-content: center;
+}
+.silhouettes {
+  display: flex;
+  gap: 4rem;
+  margin-bottom: 4rem;
+}
+.silhouette-box {
+  width: 150px;
+  height: 200px;
+  border: 1px solid rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.02);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(10px);
+  position: relative;
+}
+.id-glitch {
+  font-family: 'Courier New', Courier, monospace;
+  color: rgba(255,255,255,0.8);
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+  opacity: 0;
+}
+.is-active .id-1 { animation: idReveal 1s forwards 0.5s; }
+.is-active .id-2 { animation: idReveal 1s forwards 1s; }
+.is-active .id-3 { animation: idReveal 1s forwards 1.5s; }
+
+.center-block-bottom {
+  text-align: center;
+}
+
+/* 6. TOKEN SYSTEM */
+.sec-tokens {
+  align-items: center;
+}
+.floating-numbers {
+  position: absolute;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+.float-num {
+  position: absolute;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 3rem;
+  color: var(--heist-gold);
+  text-shadow: 0 0 20px var(--heist-gold-glow);
+  opacity: 0;
+}
+.is-active .fn-1 { top: 30%; left: 20%; animation: floatVanish 4s forwards 1s; }
+.is-active .fn-2 { top: 60%; left: 80%; animation: floatVanish 4s forwards 2.5s; color: var(--heist-red); text-shadow: 0 0 20px var(--heist-red-glow); }
+.is-active .fn-3 { top: 70%; left: 30%; animation: floatVanish 4s forwards 4s; }
+
+.token-title { font-size: 2.5rem; }
+
+/* 7. PHASE TRANSITION */
+.sec-phase {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.phase-1-block, .phase-2-block {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  z-index: 10;
+}
+
+.phase-1-block {
+  opacity: 0;
+}
+.is-active .phase-1-block {
+  animation: phase1Anim 6s forwards;
+}
+
+.phase-2-block {
+  opacity: 0;
+}
+.is-active .phase-2-block {
+  animation: phase2Anim 1s forwards 6s;
+}
+
+.is-active .p1-l1 { transition-delay: 0.5s; }
+.is-active .p1-l2 { transition-delay: 1.5s; }
+.is-active .p1-l3 { transition-delay: 2.5s; }
+
+.is-active .p2-l1 { transition-delay: 6.5s; }
+.is-active .p2-l2 { transition-delay: 7.5s; }
+.is-active .p2-l3 { transition-delay: 8.5s; }
+
+.phase-title {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5rem;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-bottom: 2rem;
+}
+
+/* 8. PARTICLE RAIN */
+.sec-particles {
+  align-items: center;
+}
+.gold-shards-rain {
+  position: absolute;
+  top: -10vh; left: 0;
+  width: 10px; height: 10px;
+  background: transparent;
+  /* CSS box-shadow for particles */
+  box-shadow: 
+    10vw 20vh var(--heist-gold), 30vw 50vh var(--heist-gold),
+    60vw 10vh var(--heist-gold), 80vw 80vh var(--heist-gold),
+    20vw 90vh var(--heist-gold), 90vw 30vh var(--heist-gold),
+    50vw 60vh var(--heist-gold), 70vw 20vh var(--heist-gold);
+  opacity: 0;
+}
+.is-active .gold-shards-rain {
+  animation: shardFall 10s linear infinite;
+  opacity: 0.8;
+}
+
+.system-logs-flashing {
+  position: absolute;
+  top: 40%;
+  width: 100%;
+  text-align: center;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5rem;
+}
+.flash-log {
+  opacity: 0;
+  margin-bottom: 2rem;
+}
+.is-active .fl-1 { animation: quickFlash 0.5s 1s; }
+.is-active .fl-2 { animation: quickFlash 0.5s 2.5s; }
+.is-active .fl-3 { animation: quickFlash 0.5s 4s; }
+
+/* 9. FINAL BUILDUP */
+.sec-final-buildup {
+  align-items: center;
+}
+
+/* 10. FINAL CTA FORMATION */
+.sec-cta {
+  align-items: center;
+}
+
+.cta-container {
+  position: relative;
+  width: 400px;
+  height: 100px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+}
+
+.particles-converge {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  border: 1px solid transparent;
+}
+.is-active .particles-converge {
+  animation: borderDraw 2s forwards;
+}
+
+.final-enter-btn {
+  background: var(--heist-black);
+  color: var(--heist-white);
+  border: 1px solid transparent;
+  padding: 1.5rem 4rem;
+  font-size: 1.2rem;
+  letter-spacing: 6px;
+  cursor: pointer;
+  opacity: 0;
+  font-family: 'Helvetica Neue', sans-serif;
+  transition: all 0.3s;
+}
+
+.is-active .final-enter-btn {
+  animation: btnReveal 1s 2s forwards;
+}
+
+.final-enter-btn:hover {
+  border-color: var(--heist-red);
+  box-shadow: 0 0 20px var(--heist-red-glow), inset 0 0 10px var(--heist-red-glow);
+  transform: scale(1.03);
+  text-shadow: 0 0 5px var(--heist-red);
+}
+
+/* 11. CLICK TRANSITION */
+.transition-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  z-index: 10000;
+}
+.system-glitch-hit {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0,0,0,0.8),
+    rgba(0,0,0,0.8) 2px,
+    transparent 2px,
+    transparent 4px
+  );
+  animation: glitchHit 0.2s forwards;
+}
+.red-flash-hit {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: var(--heist-red);
+  mix-blend-mode: color-dodge;
+  animation: redFlashHit 0.15s 0.2s forwards;
+  opacity: 0;
+}
+
+.auth-logs {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5rem;
+  color: #fff;
+  width: 100%;
+  text-align: center;
+}
+.auth-logs p { opacity: 0; margin-bottom: 1rem; }
+.auth-step-1 { animation: typeLog 0.1s 0.4s forwards; }
+.auth-step-2 { animation: typeLog 0.1s 1s forwards; }
+.auth-step-3 { animation: typeLog 0.1s 1.6s forwards; }
+
+
+/* ANIMATIONS */
+@keyframes slowFadeIn { to { opacity: 1; filter: blur(0); } }
+@keyframes typing { from { width: 0 } to { width: 100% } }
+@keyframes blink-caret { from, to { border-color: transparent } 50% { border-color: rgba(255,255,255,0.7); } }
+@keyframes glitchReplace {
+  0% { opacity: 0; transform: skewX(20deg); }
+  20% { opacity: 1; transform: skewX(-20deg); filter: invert(1); }
+  40% { transform: skewX(10deg); filter: invert(0); }
+  60% { transform: skewX(-5deg); }
+  80% { transform: skewX(2deg); }
+  100% { opacity: 1; transform: skewX(0); }
+}
+@keyframes arrowPulse {
+  0% { transform: translateY(0); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateY(20px); opacity: 0; }
+}
+@keyframes blinkNode {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+@keyframes dataTransferX {
+  0% { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent); background-position: -100vw 0; }
+  100% { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent); background-position: 100vw 0; }
+}
+@keyframes dataTransferY {
+  0% { background: linear-gradient(0deg, transparent, rgba(255,255,255,0.5), transparent); background-position: 0 -100vh; }
+  100% { background: linear-gradient(0deg, transparent, rgba(255,255,255,0.5), transparent); background-position: 0 100vh; }
+}
+@keyframes typeLog { to { opacity: 1; } }
+@keyframes idReveal {
+  0% { opacity: 0; transform: scale(0.9); }
+  20% { opacity: 1; filter: invert(1); transform: scale(1.1); }
+  40% { filter: invert(0); }
+  60% { opacity: 0.5; transform: scale(0.95); }
+  80% { opacity: 1; }
+  100% { opacity: 1; transform: scale(1); text-shadow: 0 0 10px rgba(255,255,255,0.5); }
+}
+@keyframes floatVanish {
+  0% { opacity: 0; transform: translateY(20px); }
+  20% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; transform: translateY(-40px); }
+  100% { opacity: 0; transform: translateY(-60px); filter: blur(5px); }
+}
+@keyframes phase1Anim {
+  0% { opacity: 0; }
+  5% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes phase2Anim {
+  0% { opacity: 0; transform: scale(1.2); filter: blur(10px); }
+  50% { opacity: 1; filter: invert(1); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+@keyframes shardFall {
+  from { transform: translateY(0); }
+  to { transform: translateY(100vh); }
+}
+@keyframes quickFlash {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+@keyframes borderDraw {
+  0% { border-color: transparent; box-shadow: none; }
+  50% { border-color: rgba(204,0,0,0.2); }
+  100% { border-color: var(--heist-red); box-shadow: 0 0 15px var(--heist-red-glow); }
+}
+@keyframes btnReveal {
+  to { opacity: 1; border-color: rgba(204,0,0,0.5); }
+}
+@keyframes glitchHit {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; transform: skewX(10deg); }
+}
+@keyframes redFlashHit {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* GLITCH EFFECT */
+.glitch { position: relative; }
+.glitch::before, .glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+}
+.glitch::before {
+  left: 3px;
+  text-shadow: -2px 0 var(--heist-blue);
+  clip: rect(24px, 550px, 90px, 0);
+  animation: glitch-anim-2 3s infinite linear alternate-reverse;
+}
+.glitch::after {
+  left: -3px;
+  text-shadow: -2px 0 var(--heist-red);
+  clip: rect(85px, 550px, 140px, 0);
+  animation: glitch-anim 2.5s infinite linear alternate-reverse;
+}
+@keyframes glitch-anim {
+  0% { clip: rect(41px, 9999px, 83px, 0); }
+  20% { clip: rect(100px, 9999px, 120px, 0); }
+  40% { clip: rect(12px, 9999px, 50px, 0); }
+  60% { clip: rect(80px, 9999px, 130px, 0); }
+  80% { clip: rect(30px, 9999px, 90px, 0); }
+  100% { clip: rect(60px, 9999px, 100px, 0); }
+}
+@keyframes glitch-anim-2 {
+  0% { clip: rect(15px, 9999px, 30px, 0); }
+  20% { clip: rect(40px, 9999px, 80px, 0); }
+  40% { clip: rect(90px, 9999px, 110px, 0); }
+  60% { clip: rect(20px, 9999px, 60px, 0); }
+  80% { clip: rect(120px, 9999px, 140px, 0); }
+  100% { clip: rect(50px, 9999px, 80px, 0); }
+}
+
+@media (max-width: 768px) {
+  .cinematic-line { font-size: 1.5rem; }
+  .init-type-1, .init-type-2 { font-size: 1.2rem; }
+  .cinematic-section { padding: 2rem; }
+  .silhouettes { flex-direction: column; gap: 2rem; }
+}

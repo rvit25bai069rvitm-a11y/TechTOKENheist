@@ -1,7 +1,6 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { GameStateProvider, useGameState } from './hooks/useGameState';
-import { LayoutDashboard, Swords, Crosshair, Settings, LogOut, Clock, Ban, Book, Eye, Zap } from 'lucide-react';
+import { LayoutDashboard, Swords, Crosshair, Settings, LogOut, Clock, Ban, Book, Eye, Zap, VenetianMask } from 'lucide-react';
 import CountdownOverlay from './components/CountdownOverlay';
 import LandingScreen from './screens/LandingScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -10,32 +9,32 @@ import ArenaScreen from './screens/ArenaScreen';
 import BattleScreen from './screens/BattleScreen';
 import AdminScreen from './screens/AdminScreen';
 import RulebookScreen from './screens/RulebookScreen';
-
+import { getProfileAvatar, getProfileLabel } from './data/profileAvatars';
 
 const PlayerTopBar = () => {
   const { gameTimer, gameState } = useGameState();
-  
+
   return (
-    <div className="flex-col" style={{ position: 'sticky', top: 0, zIndex: 20 }}>
+    <div className="flex flex-col sticky top-0 z-20 shadow-xl">
       {/* Phase Banner */}
       {gameState.phase === 'phase2' && (
-        <div className="flex items-center justify-center gap-2 font-heading" style={{ padding: '8px 32px', background: 'rgba(255, 95, 143, 0.12)', borderBottom: '1px solid var(--accent-magenta)', color: 'var(--accent-magenta)', fontSize: '1.1rem', letterSpacing: '2px' }}>
+        <div className="flex items-center justify-center gap-2 heist-font px-8 py-2 bg-red-900 bg-opacity-30 border-b border-heist-red text-heist-red text-xl tracking-widest">
           🔥 PHASE 2 — WAGER MODE ACTIVE
         </div>
       )}
-      <div className="panel flex items-center justify-between" style={{ padding: '16px 32px', borderRadius: 0, borderBottom: '1px solid var(--border-subtle)', borderTop: 'none', borderLeft: 'none', borderRight: 'none' }}>
+      <div className="bg-black bg-opacity-90 border-b-2 border-gray-800 p-4 px-8 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h2 className="font-heading text-survival" style={{ margin: 0, fontSize: '1.5rem', letterSpacing: '2px' }}>
-            {gameState.isGameActive ? 'BIO-HAZARD EVENT LIVE' : gameState.isPaused ? 'CONTAINMENT PAUSED' : 'AWAITING COMMAND AUTH'}
+          <h2 className="heist-font text-white m-0 text-3xl tracking-widest">
+            {gameState.isGameActive ? 'HEIST INFILTRATION LIVE' : gameState.isPaused ? 'OPERATION PAUSED' : 'AWAITING EL PROFESOR'}
           </h2>
           {(gameState.isGameActive || gameState.isPaused) && (
-            <div className={`badge ${gameState.isPaused ? 'badge-warning' : 'badge-survival'}`} style={{ fontSize: '1.2rem' }}>
-              <Clock size={16} /> {gameTimer} {gameState.isPaused && '⏸'}
+            <div className={`px-4 py-1 border ${gameState.isPaused ? 'border-heist-yellow text-heist-yellow' : 'border-heist-teal text-heist-teal'} heist-mono text-xl flex items-center gap-2`}>
+              <Clock size={18} /> {gameTimer} {gameState.isPaused && '⏸'}
             </div>
           )}
         </div>
         <div className="flex items-center gap-6">
-          <div className={`badge ${gameState.phase === 'phase2' ? 'badge-magenta' : 'badge-cyan'}`} style={{ fontSize: '0.85rem', padding: '6px 14px' }}>
+          <div className={`px-4 py-1 border ${gameState.phase === 'phase2' ? 'border-heist-red bg-heist-red text-white' : 'border-heist-yellow text-heist-yellow'} heist-mono text-sm tracking-widest flex items-center gap-2`}>
             <Zap size={14} /> {gameState.phase === 'phase2' ? 'PHASE 2' : 'PHASE 1'}
           </div>
         </div>
@@ -51,65 +50,71 @@ const PlayerSidebar = () => {
   const isEliminated = myTeam?.status === 'eliminated';
 
   return (
-    <div className="panel flex-col" style={{ width: '280px', height: '100vh', position: 'sticky', top: 0, padding: '32px 24px', borderRight: '1px solid var(--border-subtle)', borderRadius: 0, zIndex: 10, borderTop: 'none', borderBottom: 'none', borderLeft: 'none' }}>
+    <div className="w-[280px] h-screen sticky top-0 p-6 flex flex-col bg-black border-r-2 border-gray-800 z-10 shadow-2xl relative overflow-hidden">
+      {/* Blueprint background lines */}
+      <div className="absolute inset-0 bg-blueprint opacity-10 pointer-events-none"></div>
+
       {/* Brand */}
-      <div className="flex items-center gap-4 mb-12">
-        <div style={{ width: '48px', height: '48px', background: 'var(--accent-survival)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: '900', fontSize: '24px' }} className="font-heading">
-          TH
+      <div className="flex items-center gap-4 mb-10 relative z-10 mt-4">
+        <div className="w-12 h-12 bg-heist-red rounded-none flex items-center justify-center text-white border-2 border-heist-red shadow-[0_0_15px_rgba(211,47,47,0.6)]">
+          <VenetianMask size={28} />
         </div>
         <div>
-          <h1 className="font-heading" style={{ margin: 0, fontSize: '24px' }}>BIO-HAZARD</h1>
-          <h1 className="font-heading text-danger" style={{ margin: 0, fontSize: '24px' }}>COMMAND</h1>
+          <h1 className="heist-font text-white m-0 text-3xl tracking-widest">THE HEIST</h1>
+          <h1 className="heist-font text-heist-red m-0 text-3xl tracking-widest">LA BANDA</h1>
         </div>
       </div>
 
       {/* Operative Info */}
-      <div className="mb-8 p-4 card" style={{ borderColor: isEliminated ? 'var(--accent-danger)' : 'var(--border-subtle)' }}>
-        <div className="text-muted font-mono" style={{ fontSize: '10px', marginBottom: '4px' }}>OPERATIVE ID</div>
-        <div className="font-heading" style={{ fontSize: '20px', marginBottom: '12px', color: isEliminated ? 'var(--accent-danger)' : 'inherit' }}>{myTeam?.name || 'GUEST'}</div>
-        
+      <div className={`mb-8 p-4 border-2 ${isEliminated ? 'border-heist-red bg-red-900 bg-opacity-20' : 'border-gray-800 bg-black bg-opacity-60'} relative z-10`}>
+        <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-heist-teal mb-3 shadow-[0_0_18px_rgba(77,182,172,0.3)] bg-black">
+          <img src={myTeam?.avatarSrc || getProfileAvatar(myTeam?.name)} alt={myTeam?.name ? getProfileLabel(myTeam.name) : 'Operative Avatar'} className="w-full h-full object-cover" />
+        </div>
+        <div className="heist-mono text-gray-500 text-[10px] mb-1 uppercase tracking-widest">OPERATIVE ID</div>
+        <div className={`heist-font text-2xl mb-3 truncate ${isEliminated ? 'text-heist-red line-through' : 'text-white'}`}>{myTeam?.name || 'GUEST RECRUIT'}</div>
+
         {isEliminated ? (
-          <div className="badge badge-danger w-full flex justify-center py-2">
-            <Ban size={14} style={{ marginRight: '6px' }} /> ELIMINATED
+          <div className="bg-heist-red text-white w-full flex justify-center py-2 heist-mono text-xs tracking-widest border border-white">
+            <Ban size={14} className="mr-2" /> ELIMINATED
           </div>
         ) : user?.role === 'admin' ? (
-          <div className="badge badge-warning w-full flex justify-center py-2">
-            <Eye size={14} style={{ marginRight: '6px' }} /> SPECTATOR
+          <div className="border border-heist-yellow text-heist-yellow w-full flex justify-center py-2 heist-mono text-xs tracking-widest">
+            <Eye size={14} className="mr-2" /> SPECTATOR
           </div>
         ) : (
-          <div className="flex items-center justify-between">
-            <div className="text-muted font-mono" style={{ fontSize: '10px' }}>TOKENS</div>
-            <div className="badge badge-survival">{myTeam?.tokens || 0} TKN</div>
+          <div className="flex items-center justify-between border-t border-gray-800 pt-3 mt-2">
+            <div className="heist-mono text-gray-500 text-[10px] tracking-widest">CURRENT LOOT</div>
+            <div className="text-heist-yellow heist-font text-2xl border-b border-heist-yellow px-1">{myTeam?.tokens || 0} TKN</div>
           </div>
         )}
       </div>
 
       {/* Navigation */}
-      <div className="text-muted font-mono" style={{ fontSize: '10px', marginBottom: '12px' }}>CONTROL MAP</div>
-      <div className="flex-col gap-2 flex-grow">
-        <Link to="/lobby" className={`btn ${location.pathname === '/lobby' ? 'btn-primary' : 'btn-ghost'}`} style={{ justifyContent: 'flex-start', padding: '12px 16px' }}>
-          <LayoutDashboard size={18} /> LOBBY
+      <div className="heist-mono text-gray-500 text-[10px] mb-3 uppercase tracking-widest relative z-10">CONTROL MAP</div>
+      <div className="flex flex-col gap-3 flex-grow relative z-10">
+        <Link to="/lobby" className={`flex items-center gap-3 px-4 py-3 heist-font text-xl tracking-widest transition-colors ${location.pathname === '/lobby' ? 'bg-heist-red text-white border-l-4 border-white' : 'text-gray-400 hover:text-white hover:bg-gray-900 border-l-4 border-transparent'}`}>
+          <LayoutDashboard size={20} /> BRIEFING ROOM
         </Link>
-        <Link to="/arena" className={`btn ${location.pathname === '/arena' ? 'btn-primary' : 'btn-ghost'}`} style={{ justifyContent: 'flex-start', padding: '12px 16px' }}>
-          <Swords size={18} /> ARENA
+        <Link to="/arena" className={`flex items-center gap-3 px-4 py-3 heist-font text-xl tracking-widest transition-colors ${location.pathname === '/arena' ? 'bg-heist-red text-white border-l-4 border-white' : 'text-gray-400 hover:text-white hover:bg-gray-900 border-l-4 border-transparent'}`}>
+          <Swords size={20} /> ARENA
         </Link>
-        <Link to="/battle" className={`btn ${location.pathname === '/battle' ? 'btn-primary' : 'btn-ghost'}`} style={{ justifyContent: 'flex-start', padding: '12px 16px' }}>
-          <Crosshair size={18} /> BATTLE
+        <Link to="/battle" className={`flex items-center gap-3 px-4 py-3 heist-font text-xl tracking-widest transition-colors ${location.pathname === '/battle' ? 'bg-heist-red text-white border-l-4 border-white' : 'text-gray-400 hover:text-white hover:bg-gray-900 border-l-4 border-transparent'}`}>
+          <Crosshair size={20} /> INFILTRATION
         </Link>
-        <Link to="/rulebook" className={`btn ${location.pathname === '/rulebook' ? 'btn-primary' : 'btn-ghost'}`} style={{ justifyContent: 'flex-start', padding: '12px 16px' }}>
-          <Book size={18} /> RULEBOOK
+        <Link to="/rulebook" className={`flex items-center gap-3 px-4 py-3 heist-font text-xl tracking-widest transition-colors ${location.pathname === '/rulebook' ? 'bg-heist-red text-white border-l-4 border-white' : 'text-gray-400 hover:text-white hover:bg-gray-900 border-l-4 border-transparent'}`}>
+          <Book size={20} /> THE PLAN (RULES)
         </Link>
       </div>
 
       {/* Logout */}
-      <div className="mt-auto pt-8" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+      <div className="mt-auto pt-6 border-t-2 border-gray-800 relative z-10">
         {user?.role === 'admin' && (
-          <Link to="/admin" className="btn btn-warning w-full" style={{ justifyContent: 'center', marginBottom: '10px' }}>
-            <Settings size={16} /> EXIT SPECTATOR
+          <Link to="/admin" className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-heist-yellow text-heist-yellow hover:bg-heist-yellow hover:text-black mb-3 heist-font text-xl tracking-widest transition-colors">
+            <Settings size={18} /> BACK TO TENT
           </Link>
         )}
-        <button className="btn btn-ghost w-full" style={{ justifyContent: 'center', borderColor: 'var(--accent-danger)', color: 'var(--accent-danger)' }} onClick={logout}>
-          <LogOut size={16} /> DISCONNECT
+        <button className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-gray-600 text-gray-400 hover:border-heist-red hover:text-heist-red heist-font text-xl tracking-widest transition-colors" onClick={logout}>
+          <LogOut size={18} /> FLEE
         </button>
       </div>
     </div>
@@ -119,31 +124,31 @@ const PlayerSidebar = () => {
 const AdminLayout = ({ children }) => {
   const { logout, gameState } = useGameState();
   return (
-    <div className="flex-col min-h-screen">
-      <nav className="panel flex items-center justify-between" style={{ padding: '16px 32px', borderRadius: 0, borderBottom: '1px solid var(--accent-danger)', zIndex: 10 }}>
+    <div className="flex flex-col min-h-screen heist-bg text-white">
+      <nav className="bg-black bg-opacity-90 border-b-2 border-heist-red p-4 px-8 flex items-center justify-between z-20 shadow-[0_4px_20px_rgba(211,47,47,0.2)]">
         <div className="flex items-center gap-6">
-          <div style={{ width: '48px', height: '48px', background: 'var(--accent-danger)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: '900', fontSize: '24px' }}>
-            ⚙
+          <div className="w-12 h-12 bg-heist-red text-white flex items-center justify-center border-2 border-heist-red shadow-[0_0_15px_rgba(211,47,47,0.8)]">
+            <VenetianMask size={28} />
           </div>
           <div>
-            <h1 className="font-heading text-danger" style={{ margin: 0, fontSize: '24px', letterSpacing: '2px' }}>COMMANDER</h1>
-            <h1 className="font-mono text-muted" style={{ margin: 0, fontSize: '10px', letterSpacing: '4px' }}>BIO-HAZARD OPS</h1>
+            <h1 className="heist-font text-heist-red m-0 text-3xl tracking-widest">EL PROFESOR</h1>
+            <h1 className="heist-mono text-gray-500 m-0 text-[10px] tracking-widest uppercase">OPERATION CONTROL TENT</h1>
           </div>
         </div>
-        
+
         {/* Admin Phase + Logout */}
         <div className="flex items-center gap-8">
-          <div className={`badge ${gameState.phase === 'phase2' ? 'badge-magenta' : 'badge-cyan'}`} style={{ fontSize: '0.9rem', padding: '8px 16px' }}>
-            <Zap size={14} style={{ marginRight: '4px' }} />
+          <div className={`px-4 py-2 heist-mono text-sm tracking-widest flex items-center gap-2 ${gameState.phase === 'phase2' ? 'bg-heist-red text-white' : 'border border-heist-teal text-heist-teal'}`}>
+            <Zap size={14} />
             {gameState.phase === 'phase2' ? 'PHASE 2 — WAGER' : 'PHASE 1 — STANDARD'}
           </div>
 
-          <button className="btn btn-ghost" style={{ borderColor: 'var(--accent-danger)', color: 'var(--accent-danger)' }} onClick={logout}>
+          <button className="flex items-center gap-2 px-4 py-2 border border-gray-600 text-gray-400 hover:border-heist-red hover:text-heist-red heist-font text-xl tracking-widest transition-colors" onClick={logout}>
             <LogOut size={16} /> DISCONNECT
           </button>
         </div>
       </nav>
-      <div className="p-8" style={{ maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+      <div className="p-8 w-full max-w-[1400px] mx-auto">
         {children}
       </div>
     </div>
@@ -152,11 +157,13 @@ const AdminLayout = ({ children }) => {
 
 const PlayerLayout = ({ children }) => {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen heist-bg">
       <PlayerSidebar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div className="flex-1 flex flex-col relative overflow-hidden">
+        {/* Faint global background grid */}
+        <div className="absolute inset-0 bg-blueprint opacity-5 pointer-events-none z-0"></div>
         <PlayerTopBar />
-        <div style={{ padding: '40px 64px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+        <div className="p-6 md:p-10 w-full max-w-[1200px] mx-auto relative z-10 pb-24">
           {children}
         </div>
       </div>

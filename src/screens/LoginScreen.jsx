@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
 import { Lock, ArrowLeft } from 'lucide-react';
+import './LoginScreen.css';
 
 const LoginScreen = () => {
   const navigate = useNavigate();
@@ -25,52 +26,42 @@ const LoginScreen = () => {
           navigate('/lobby');
         }
       } else {
-        setError(result.error || 'Invalid credentials');
+        setError(result.error || 'Access Denied');
       }
-    } catch (err) {
-      setError('Connection error. Is the server running?');
+    } catch {
+      setError('Connection to The Professor lost.');
     }
     setLoading(false);
   };
 
   return (
-    <div className="login-page">
-      <div className="glass-panel login-card">
-        {/* Back button */}
+    <div className="money-heist-bg">
+      <div className="heist-panel">
         <button
-          className="btn btn-ghost"
+          className="heist-back-btn"
           onClick={() => navigate('/')}
-          style={{ marginBottom: '1.5rem', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
         >
-          <ArrowLeft size={16} /> Back
+          <ArrowLeft size={16} /> Retreat
         </button>
 
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div style={{
-            width: '56px', height: '56px', margin: '0 auto 1rem',
-            background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta))',
-            borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.25rem', fontWeight: '900', color: '#000'
-          }}>
-            TH
-          </div>
+        <div style={{ textAlign: 'center' }}>
+          <div className="heist-mask-icon"></div>
+
+          <h1 className="heist-title">Enter The Vault</h1>
+          <p className="heist-subtitle">Identify your alias. The Resistance needs you.</p>
         </div>
 
-        <h1 className="text-gradient" style={{ fontSize: '1.5rem' }}>Enter the Command Grid</h1>
-        <p className="login-subtitle">Authenticate as survivor squad or command admin</p>
+        {error && <div className="login-error" style={{ borderColor: '#ff1a1a', background: 'rgba(255, 0, 0, 0.1)', color: '#ff6666' }}>{error}</div>}
 
-        {error && <div className="login-error">{error}</div>}
-
-        <form onSubmit={handleSubmit} className="flex-col gap-4">
-          <div className="flex-col gap-1">
-            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Username
+        <form onSubmit={handleSubmit}>
+          <div className="heist-input-group">
+            <label className="heist-label">
+              Profile Name / Professor ID
             </label>
             <input
               type="text"
-              className="input"
-              placeholder="Team Name or Admin ID"
+              className="heist-input"
+              placeholder="e.g. tokyo, berlin, alicia"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -78,14 +69,14 @@ const LoginScreen = () => {
             />
           </div>
 
-          <div className="flex-col gap-1">
-            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Password
+          <div className="heist-input-group">
+            <label className="heist-label">
+              Access Code
             </label>
             <input
               type="password"
-              className="input"
-              placeholder="Enter password"
+              className="heist-input"
+              placeholder="Enter secure code"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -94,18 +85,17 @@ const LoginScreen = () => {
 
           <button
             type="submit"
-            className="btn btn-primary"
+            className="heist-btn"
             disabled={loading}
-            style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem', padding: '0.85rem' }}
           >
-            <Lock size={16} />
-            {loading ? 'Authenticating...' : 'Login'}
+            <Lock size={18} />
+            {loading ? 'BREACHING SYSTEM...' : 'BREACH VAULT'}
           </button>
         </form>
 
-        <div style={{ marginTop: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: 1.6 }}>
-          <p>Players: Use your team name as username</p>
-          <p>Admin: Use the admin credentials provided</p>
+        <div className="heist-footer-text">
+          <p>Recruits: Enter your assigned <span>Profile Name</span></p>
+          <p>Professor: Use your secure <span>Override Credentials</span></p>
         </div>
       </div>
     </div>
