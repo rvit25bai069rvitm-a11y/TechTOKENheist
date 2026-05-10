@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LandingScreen.css';
 import rvitmImg from '../assets/rvitm.png';
@@ -10,31 +10,64 @@ import songMp3 from '../assets/song.mp3';
 import { motion } from 'framer-motion';
 import gdgLogo from '../../assets/gdg.png';
 
-const RAIN_TOKENS = Array.from({ length: 16 }, (_, index) => {
+const TOKEN_BURST = [
+  { id: 'alpha', x: -31, y: -24, size: 64, delay: 0.1, duration: 6.8, drift: -26, spin: -240, scale: 0.92 },
+  { id: 'bravo', x: 28, y: -19, size: 48, delay: 0.45, duration: 6.2, drift: 22, spin: 280, scale: 0.82 },
+  { id: 'charlie', x: -21, y: 12, size: 42, delay: 0.75, duration: 5.8, drift: -18, spin: 210, scale: 0.78 },
+  { id: 'delta', x: 23, y: 16, size: 70, delay: 0.25, duration: 7.2, drift: 30, spin: 320, scale: 0.96 },
+  { id: 'echo', x: -4, y: -31, size: 36, delay: 0.95, duration: 5.4, drift: 16, spin: -180, scale: 0.72 },
+];
+
+const RAIN_TOKENS = Array.from({ length: 22 }, (_, index) => {
   const side = index % 2 === 0 ? -1 : 1;
 
   return {
     id: index,
-    left: `${(index * 11) % 100}%`,
-    size: 42 + (index % 4) * 12,
-    delay: index * 0.35,
-    duration: 5.6 + (index % 5) * 0.7,
-    drift: side * (72 + index * 4),
-    spin: 220 + index * 18,
+    left: `${(index * 9 + (index % 3) * 4) % 100}%`,
+    size: 34 + (index % 5) * 11,
+    delay: index * 0.26,
+    duration: 5.1 + (index % 6) * 0.58,
+    drift: side * (58 + index * 4),
+    spin: 300 + index * 34,
+    faceSpin: 1.05 + (index % 4) * 0.18,
+    sway: 22 + (index % 6) * 7,
+    scale: (0.76 + (index % 5) * 0.07).toFixed(2),
+    blur: index % 6 === 0 ? 1.2 : index % 5 === 0 ? 0.55 : 0,
   };
 });
+
+const finaleMotion = {
+  initial: { opacity: 0, y: 26 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: false, amount: 0.58, margin: '-8% 0px -14% 0px' },
+  transition: { duration: 0.95, ease: [0.22, 1, 0.36, 1] },
+};
 
 const LandingScreen = () => {
   const navigate = useNavigate();
   const [started, setStarted] = useState(false);
   const [scrollY, setScrollY] = useState(0);
   const [mousePos, setMousePos] = useState({ x: -100, y: -100 });
-  const [isHovering, setIsHovering] = useState(false);
   const [showScrollHint, setShowScrollHint] = useState(false);
   const audioRef = useRef(null);
 
+  useEffect(() => {
+    document.documentElement.classList.add('landing-route');
+    return () => {
+      document.documentElement.classList.remove('landing-route', 'landing-scroll-mode');
+    };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('landing-scroll-mode', started);
+    return () => {
+      document.documentElement.classList.remove('landing-scroll-mode');
+    };
+  }, [started]);
+
   const handleStart = () => {
     setStarted(true);
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     if (audioRef.current) {
       audioRef.current.volume = 0.08;
       audioRef.current.play().catch(() => console.log('Audio play blocked'));
@@ -48,6 +81,13 @@ const LandingScreen = () => {
         }
         if (audioRef.current) audioRef.current.volume = vol;
       }, 300);
+    }
+  };
+
+  const handlePreludeKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleStart();
     }
   };
 
@@ -89,9 +129,9 @@ const LandingScreen = () => {
         e.target.closest('a') ||
         e.target.classList.contains('prelude-overlay')
       ) {
-        setIsHovering(true);
+        document.body.classList.add('landing-is-hovering');
       } else {
-        setIsHovering(false);
+        document.body.classList.remove('landing-is-hovering');
       }
     };
 
@@ -100,6 +140,7 @@ const LandingScreen = () => {
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseover', handleMouseOver);
+      document.body.classList.remove('landing-is-hovering');
     };
   }, []);
 
@@ -114,7 +155,10 @@ const LandingScreen = () => {
       });
     };
 
-    const observer = new IntersectionObserver(observerCallback, { threshold: 0.25 });
+    const observer = new IntersectionObserver(observerCallback, {
+      threshold: [0.18, 0.45],
+      rootMargin: '-8% 0px -14% 0px',
+    });
 
     // Give React a tick to render the dw-cards
     setTimeout(() => {
@@ -131,7 +175,7 @@ const LandingScreen = () => {
       if (window.scrollY < 50) {
         setShowScrollHint(true);
       }
-    }, 4000); // Wait for typewriter to mostly finish
+    }, 3400); // Wait for typewriter to mostly finish
 
     return () => clearTimeout(timer);
   }, [started]);
@@ -142,19 +186,24 @@ const LandingScreen = () => {
 
   // Background slowly becomes visible around section 1 (100vh) to section 2 (200vh)
   const bgOpacity = started ? Math.min(1, Math.max(0, (scrollY - vh * 0.5) / vh)) : 0;
-  const bgScale = 1 + scrollY * 0.00008; // slow cinematic zoom-in
-
   // Darken everything heavily near the end (Section 9)
   const pitchBlackOpacity = Math.min(1, Math.max(0, (scrollY - vh * 7.5) / vh));
 
   // Phase 2 Red shift
   const phase2Active = scrollY > vh * 6;
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
+  const isMobileViewport = viewportWidth <= 768;
   const safeMouseX = mousePos.x >= 0 ? mousePos.x : viewportWidth / 2;
   const safeMouseY = mousePos.y >= 0 ? mousePos.y : vh / 2;
   const rainDriftX = ((safeMouseX / viewportWidth) - 0.5) * 220;
   const rainDriftY = ((safeMouseY / vh) - 0.5) * 90;
   const rainSpeed = started ? Math.max(0.35, 1 - (scrollY / (vh * 5)) * 0.65) : 1;
+  const mobileVaultScale = 1 + Math.min(0.045, Math.max(0, (scrollY - vh * 0.45) / (vh * 7.5)) * 0.045);
+  const vaultScale = isMobileViewport ? mobileVaultScale : 1;
+  const tokyoRevealRadius = isMobileViewport ? 260 : 360;
+  const tokyoLightRadius = isMobileViewport ? 300 : 390;
+  const tokyoRevealMask = `radial-gradient(${tokyoRevealRadius}px circle at ${safeMouseX}px ${safeMouseY}px, black 0%, rgba(0, 0, 0, 0.82) 24%, rgba(0, 0, 0, 0.36) 54%, transparent 100%)`;
+  const tokyoCursorGlow = `radial-gradient(${tokyoLightRadius}px circle at ${safeMouseX}px ${safeMouseY}px, rgba(255, 190, 82, 0.16), rgba(255, 111, 0, 0.09) 32%, rgba(150, 17, 10, 0.045) 56%, transparent 78%)`;
 
   return (
     <div
@@ -162,13 +211,22 @@ const LandingScreen = () => {
       style={{
         '--rain-drift-x': `${rainDriftX}px`,
         '--rain-drift-y': `${rainDriftY}px`,
+        '--rain-drift-x-mid': `${rainDriftX * 0.55}px`,
+        '--rain-drift-y-mid': `${rainDriftY * 0.4}px`,
       }}
     >
       <audio ref={audioRef} src={songMp3} loop />
 
       {/* 0. PRELUDE — SILENCE */}
       {!started && (
-        <div className="prelude-overlay" onClick={handleStart}>
+        <div
+          className="prelude-overlay"
+          onClick={handleStart}
+          onKeyDown={handlePreludeKeyDown}
+          role="button"
+          tabIndex={0}
+          aria-label="Begin Tech Token Heist intro"
+        >
           <p className="prelude-text">you are invited</p>
         </div>
       )}
@@ -179,9 +237,9 @@ const LandingScreen = () => {
         style={{
           backgroundImage: `url(${rvitmImg})`,
           opacity: bgOpacity,
-          transform: `scale(${bgScale})`,
+          transform: `scale(${vaultScale})`,
           filter: phase2Active ? 'brightness(0.6) sepia(1) hue-rotate(320deg) saturate(3)' : 'brightness(0.5)',
-          transition: 'filter 1s ease-out'
+          transition: 'filter 1s ease-out, transform 1.6s ease-out'
         }}
       />
 
@@ -202,7 +260,7 @@ const LandingScreen = () => {
               </div>
             </div>
             <div className="scroll-pulse-indicator" style={{ opacity: showScrollHint && scrollY < 50 ? 1 : 0 }}>
-              <p className="scroll-text">SCROLL DOWN</p>
+              <p className="scroll-text">Scroll to open the dossier</p>
               <div className="arrow"></div>
             </div>
           </section>
@@ -247,17 +305,45 @@ const LandingScreen = () => {
 
           {/* 6. TOKEN SYSTEM */}
           <section className="dw-card sec-tokens">
-            <div className="floating-numbers">
-              <span className="float-num fn-1">+1</span>
-              <span className="float-num fn-2">-2</span>
-              <span className="float-num fn-3">+5</span>
+            <div className="token-burst" aria-hidden="true">
+              {TOKEN_BURST.map((token) => (
+                <span
+                  key={token.id}
+                  className="token-burst__coin"
+                  style={{
+                    '--coin-x': `${token.x}vw`,
+                    '--coin-y': `${token.y}vh`,
+                    '--coin-size': `${token.size}px`,
+                    '--coin-delay': `${token.delay}s`,
+                    '--coin-duration': `${token.duration}s`,
+                    '--coin-drift': `${token.drift}px`,
+                    '--coin-spin': `${token.spin}deg`,
+                    '--coin-spin-mid': `${token.spin * 0.45}deg`,
+                    '--coin-spin-late': `${token.spin * 0.82}deg`,
+                    '--coin-scale': `${token.scale}`,
+                    '--coin-entry-scale': `${token.scale * 0.7}`,
+                    '--coin-exit-scale': `${token.scale * 0.78}`,
+                  }}
+                >
+                  <img src={tokenImg} alt="" />
+                </span>
+              ))}
             </div>
             <div className="center-block">
               <p className="cinematic-line line-1 text-gold token-title">Tokens define your position.</p>
-              <div className="mt-20">
-                <p className="cinematic-line line-2 dw-card__text">Gain them.</p>
-                <p className="cinematic-line line-3 mt-4 dw-card__text">Lose them.</p>
-                <p className="cinematic-line line-4 mt-4 text-red dw-card__text">Or disappear.</p>
+              <div className="token-rule-set mt-20">
+                <p className="cinematic-line line-2 token-rule dw-card__text">
+                  <span>Gain them.</span>
+                  <span className="token-change token-change--gain">+1</span>
+                </p>
+                <p className="cinematic-line line-3 token-rule dw-card__text">
+                  <span>Lose them.</span>
+                  <span className="token-change token-change--loss">-2</span>
+                </p>
+                <p className="cinematic-line line-4 token-rule text-red dw-card__text">
+                  <span>Or disappear.</span>
+                  <span className="token-change token-change--danger">-5</span>
+                </p>
               </div>
             </div>
           </section>
@@ -270,9 +356,6 @@ const LandingScreen = () => {
               <p className="cinematic-line p1-l2 mt-2 dw-card__text">Balanced.</p>
               <p className="cinematic-line p1-l3 mt-2 dw-card__text">Predictable.</p>
             </div>
-
-            <div className="phase-trigger-hit"></div>
-
             <div className="phase-2-block">
               <h2 className="phase-title text-red glitch dw-card__display--single" data-text="Phase 2">Phase 2</h2>
               <p className="cinematic-line p2-l1 mt-4 dw-card__text">Constraints removed.</p>
@@ -285,11 +368,9 @@ const LandingScreen = () => {
           <section className="dw-card sec-particles">
             <div className="token-rain" aria-hidden="true">
               {RAIN_TOKENS.map((token) => (
-                <img
+                <span
                   key={token.id}
-                  className="token-rain__token"
-                  src={tokenImg}
-                  alt=""
+                  className="token-rain__coin"
                   style={{
                     left: token.left,
                     width: `${token.size}px`,
@@ -297,9 +378,21 @@ const LandingScreen = () => {
                     animationDelay: `${token.delay}s`,
                     animationDuration: `${token.duration * rainSpeed}s`,
                     '--token-drift': `${token.drift}px`,
+                    '--token-drift-mid': `${token.drift * 0.55}px`,
                     '--token-spin': `${token.spin}deg`,
+                    '--token-spin-mid': `${token.spin * 0.38}deg`,
+                    '--token-spin-late': `${token.spin * 0.72}deg`,
+                    '--token-face-duration': `${token.faceSpin}s`,
+                    '--token-sway': `${token.sway}px`,
+                    '--token-sway-start': `${token.sway * -0.45}px`,
+                    '--token-scale': token.scale,
+                    '--token-entry-scale': `${token.scale * 0.78}`,
+                    '--token-exit-scale': `${token.scale * 0.72}`,
+                    '--token-blur': `${token.blur}px`,
                   }}
-                />
+                >
+                  <img className="token-rain__image" src={tokenImg} alt="" />
+                </span>
               ))}
             </div>
           </section>
@@ -318,39 +411,59 @@ const LandingScreen = () => {
           <div className="heist-finale-sequence">
             {/* SECTION 1 - TOKYO */}
             <motion.section className="dw-card finale-sec finale-tokyo"
-              initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: false, amount: 0.65 }}
+              initial={finaleMotion.initial}
+              whileInView={finaleMotion.whileInView}
+              viewport={finaleMotion.viewport}
+              transition={finaleMotion.transition}
             >
               <div className="tokyo-bg base-layer" style={{ backgroundImage: `url(${tokyolImg})` }} />
               <div className="tokyo-bg reveal-layer" style={{
                 backgroundImage: `url(${tokyolImg})`,
-                maskImage: `radial-gradient(400px circle at ${mousePos.x}px ${mousePos.y}px, black 10%, transparent 100%)`,
-                WebkitMaskImage: `radial-gradient(400px circle at ${mousePos.x}px ${mousePos.y}px, black 10%, transparent 100%)`,
-                maskAttachment: 'fixed',
-                WebkitMaskAttachment: 'fixed'
+                maskImage: tokyoRevealMask,
+                WebkitMaskImage: tokyoRevealMask,
               }} />
+              <div
+                className="tokyo-cursor-light"
+                style={{
+                  background: tokyoCursorGlow
+                }}
+              />
               <div className="typography-overlay">
                 <motion.h1 className="finale-title vertical-text"
-                  initial={{ opacity: 0, letterSpacing: '10px' }}
-                  whileInView={{ opacity: 1, letterSpacing: '30px' }}
-                  transition={{ duration: 2 }}
+                  initial={finaleMotion.initial}
+                  whileInView={finaleMotion.whileInView}
+                  viewport={finaleMotion.viewport}
+                  transition={{ ...finaleMotion.transition, delay: 0.1 }}
                 >
                   TOKYO / 東京 / 東京
+                </motion.h1>
+                <motion.h1 className="finale-title mobile-title" aria-hidden="true"
+                  initial={finaleMotion.initial}
+                  whileInView={finaleMotion.whileInView}
+                  viewport={finaleMotion.viewport}
+                  transition={{ ...finaleMotion.transition, delay: 0.1 }}
+                >
+                  TOKYO / 東京
                 </motion.h1>
               </div>
             </motion.section>
 
             {/* SECTION 2 - REOL */}
             <motion.section className="dw-card finale-sec finale-reol"
-              initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: false, amount: 0.6 }}
+              initial={finaleMotion.initial}
+              whileInView={finaleMotion.whileInView}
+              viewport={finaleMotion.viewport}
+              transition={finaleMotion.transition}
             >
-              <div className="rio-container">
+              <div className="reol-container">
                 <motion.img
                   src={riolImg}
                   alt="Reol"
                   className="reol-image"
                   initial={{ scale: 0.9 }}
                   whileInView={{ scale: 1.05 }}
-                  transition={{ duration: 4, ease: "easeOut" }}
+                  viewport={finaleMotion.viewport}
+                  transition={{ duration: 2.4, ease: "easeOut" }}
                 />
                 <div className="reol-glow" style={{
                   background: `radial-gradient(circle at ${mousePos.x}px ${mousePos.y}px, rgba(255, 0, 0, 0.4), transparent 400px)`
@@ -360,22 +473,26 @@ const LandingScreen = () => {
                 <motion.h1 className="reol-title"
                   initial={{ filter: 'blur(20px)', opacity: 0, x: -50 }}
                   whileInView={{ filter: 'blur(0px)', opacity: 1, x: 0 }}
-                  transition={{ duration: 1.5, staggerChildren: 0.2 }}
+                  viewport={finaleMotion.viewport}
+                  transition={{ duration: 0.9, staggerChildren: 0.1 }}
                 >
                   RIO
                 </motion.h1>
                 <motion.h2 className="reol-subtitle"
-                  initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.5, duration: 1 }}
+                  initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={finaleMotion.viewport} transition={{ delay: 0.2, duration: 0.7 }}
                 >EASE OUT</motion.h2>
                 <motion.h2 className="reol-subtitle red-accent"
-                  initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 1, duration: 1 }}
+                  initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={finaleMotion.viewport} transition={{ delay: 0.38, duration: 0.7 }}
                 >RELAX</motion.h2>
               </div>
             </motion.section>
 
             {/* SECTION 3 - BERLIN */}
             <motion.section className="dw-card finale-sec finale-berlin"
-              initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: false, amount: 0.85 }}
+              initial={finaleMotion.initial}
+              whileInView={finaleMotion.whileInView}
+              viewport={finaleMotion.viewport}
+              transition={finaleMotion.transition}
             >
               <div className="berlin-container">
                 <motion.img
@@ -384,18 +501,19 @@ const LandingScreen = () => {
                   className="berlin-image"
                   initial={{ scale: 1.2, filter: 'brightness(0.2)' }}
                   whileInView={{ scale: 1, filter: 'brightness(1)' }}
-                  transition={{ duration: 3, ease: "easeOut" }}
+                  viewport={finaleMotion.viewport}
+                  transition={{ duration: 1.8, ease: "easeOut" }}
                 />
               </div>
               <div className="berlin-typography">
                 <motion.h1 className="berlin-title"
-                  initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 1.5 }}
+                  initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={finaleMotion.viewport} transition={{ duration: 0.85 }}
                 >WE WELCOME YOU!</motion.h1>
                 <motion.h2 className="berlin-subtitle"
-                  initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 1.5, delay: 0.3 }}
+                  initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={finaleMotion.viewport} transition={{ duration: 0.75, delay: 0.18 }}
                 >THROW THE DICE</motion.h2>
                 <motion.h2 className="berlin-subtitle"
-                  initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 1.5, delay: 0.6 }}
+                  initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={finaleMotion.viewport} transition={{ duration: 0.75, delay: 0.32 }}
                 >LET THE HEIST BEGIN</motion.h2>
 
                 <motion.button
@@ -403,7 +521,8 @@ const LandingScreen = () => {
                   onClick={handleEnterSystem}
                   initial={{ opacity: 0, scale: 0.8 }}
                   whileInView={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 1, delay: 1.5, type: 'spring' }}
+                  viewport={finaleMotion.viewport}
+                  transition={{ duration: 0.7, delay: 0.58, type: 'spring' }}
                   whileHover={{ scale: 1.05, textShadow: "0px 0px 8px rgb(255,255,255)", boxShadow: "0px 0px 20px rgba(255,0,0,0.8)" }}
                 >
                   ENTER HEIST
@@ -413,7 +532,8 @@ const LandingScreen = () => {
                   className="mt-12 flex items-center gap-4 opacity-30 group"
                   initial={{ opacity: 0 }}
                   whileInView={{ opacity: 0.3 }}
-                  transition={{ delay: 2 }}
+                  viewport={finaleMotion.viewport}
+                  transition={{ delay: 0.75 }}
                 >
                   <img src={gdgLogo} alt="GDG" className="h-6 w-auto grayscale invert" />
                   <div className="h-8 w-[1px] bg-white/20"></div>

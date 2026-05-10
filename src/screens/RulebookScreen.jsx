@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { rulebookSections, rulebookDomains, rulebookFlow, rulebookConstraints, rulebookAdminDuties, rulebookImportantNotes, rulebookPhase2, rulebookGameplayNotes } from '../data/rulebookData';
-import { BookOpen, ChevronDown, ChevronUp, Swords, Users, Zap, ShieldAlert, Target, VenetianMask, FileText } from 'lucide-react';
+import { BookOpen, ChevronDown, Swords, Zap, ShieldAlert, Target, VenetianMask } from 'lucide-react';
 import { useGameState } from '../hooks/useGameState';
 
 const CollapsibleSection = ({ title, icon, children, defaultOpen = false, accentColor = 'var(--heist-red)' }) => {

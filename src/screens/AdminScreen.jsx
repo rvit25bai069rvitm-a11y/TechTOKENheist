@@ -66,7 +66,6 @@ const AdminScreen = () => {
   const [memberNames, setMemberNames] = useState([]);
   const [leader, setLeader] = useState('');
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [logFilter, setLogFilter] = useState('all'); // 'all', 'matches', 'admin'
 
   const [domainInput, setDomainInput] = useState('');

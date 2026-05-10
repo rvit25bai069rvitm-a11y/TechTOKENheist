@@ -64,7 +64,7 @@ const LoginScreen = () => {
         <section className="w-full lg:w-1/3 xl:w-1/4 bg-[#2c1b1a] flex flex-col justify-between border-l border-white/5 z-10 shadow-[-8px_0px_0px_rgba(0,0,0,0.6)]">
           {/* Top Branding */}
           <div className="px-8 py-10 border-b border-white/5 relative overflow-hidden bg-[#190a09]">
-             <div className="absolute inset-0 bg-[url('/blueprint.png')] opacity-5"></div>
+             <div className="login-blueprint-overlay"></div>
              <button
               className="heist-back-btn mb-10 flex items-center gap-2 text-[10px] text-gray-500 hover:text-red-500 transition-colors uppercase tracking-[0.2em] heist-mono"
               onClick={() => navigate('/')}

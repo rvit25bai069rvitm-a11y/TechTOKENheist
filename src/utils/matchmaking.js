@@ -234,7 +234,7 @@ export function buildQueueDiagnostics({ gameState, teams, matchmakingQueue, matc
     return {
       teamId: entry.teamId,
       teamName: entry.teamName,
-      tokens: entry.tokens,
+      tokens: entry.teamTokens ?? self?.tokens ?? 0,
       blockers,
       hasAnyPossibleMatch: blockers.some((b) => b.canMatchNow),
     }

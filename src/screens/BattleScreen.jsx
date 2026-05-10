@@ -1,7 +1,7 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useGameState } from '../hooks/useGameState';
-import { Target, Skull, AlertCircle, Timer, ShieldAlert, Swords, Lock, VenetianMask, Search, Zap } from 'lucide-react';
+import { Target, Skull, Timer, ShieldAlert, Swords, Lock, Search, Zap } from 'lucide-react';
 
 const MatchTimer = ({ startTime }) => {
   const [display, setDisplay] = React.useState('0:00');

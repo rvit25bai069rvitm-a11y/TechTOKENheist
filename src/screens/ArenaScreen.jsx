@@ -6,20 +6,8 @@ import { buildQueueDiagnostics } from '../utils/matchmaking';
 
 const ArenaScreen = () => {
   const { teams, activeMatches, myTeam, gameState, isInQueue, myQueueEntry, joinQueue, matchmakingQueue, matchConstraints } = useGameState();
-
-  if (!gameState.isGameActive && !gameState.isPaused) {
-    return (
-      <div className="bg-[#0a0a0a]/80 backdrop-blur-md border border-red-900/30 rounded-sm p-16 text-center shadow-2xl h-full flex flex-col justify-center items-center">
-        <Lock size={64} className="text-gray-600 mb-6 mx-auto" />
-        <h2 className="heist-font text-gray-400 text-5xl mb-4 tracking-widest uppercase">ARENA LOCKED</h2>
-        <p className="heist-mono text-gray-500 text-sm tracking-widest uppercase max-w-md mx-auto">Awaiting The Professor's authorization to commence matchmaking.</p>
-      </div>
-    );
-  }
-
   const amIEliminated = myTeam && myTeam.status === 'eliminated';
   const amITimeout = myTeam && myTeam.status === 'timeout';
-  const amIBusy = myTeam && !['idle'].includes(myTeam.status);
   const isPaused = gameState.isPaused;
   const isPhase2 = gameState.phase === 'phase2';
   const autoJoinRequestedRef = React.useRef(false);
@@ -35,6 +23,8 @@ const ArenaScreen = () => {
   );
 
   React.useEffect(() => {
+    if (!gameState.isGameActive && !gameState.isPaused) return;
+
     if (shouldAutoJoinQueue && !autoJoinRequestedRef.current) {
       autoJoinRequestedRef.current = true;
       joinQueue();
@@ -44,10 +34,10 @@ const ArenaScreen = () => {
     if (!shouldAutoJoinQueue || isInQueue) {
       autoJoinRequestedRef.current = false;
     }
-  }, [shouldAutoJoinQueue, isInQueue, joinQueue]);
+  }, [gameState.isGameActive, gameState.isPaused, shouldAutoJoinQueue, isInQueue, joinQueue]);
 
   const waitingQueue = React.useMemo(
-    () => (matchmakingQueue || []).filter((q) => !q.matchedWith),
+    () => (matchmakingQueue || []).filter((q) => !(q.matchedWith || q.matched_with)),
     [matchmakingQueue]
   );
 
@@ -68,6 +58,16 @@ const ArenaScreen = () => {
 
   const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } };
+
+  if (!gameState.isGameActive && !gameState.isPaused) {
+    return (
+      <div className="bg-[#0a0a0a]/80 backdrop-blur-md border border-red-900/30 rounded-sm p-16 text-center shadow-2xl h-full flex flex-col justify-center items-center">
+        <Lock size={64} className="text-gray-600 mb-6 mx-auto" />
+        <h2 className="heist-font text-gray-400 text-5xl mb-4 tracking-widest uppercase">ARENA LOCKED</h2>
+        <p className="heist-mono text-gray-500 text-sm tracking-widest uppercase max-w-md mx-auto">Awaiting The Professor's authorization to commence matchmaking.</p>
+      </div>
+    );
+  }
 
   return (
     <motion.div className="flex flex-col gap-8 text-white pb-20 relative h-full" variants={containerVariants} initial="hidden" animate="visible">

@@ -11,13 +11,26 @@
 
 .money-heist-login-viewport {
   min-height: 100vh;
+  min-height: 100svh;
   background-color: #1f0f0e;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .blueprint-grid {
   background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   background-size: 24px 24px;
+}
+
+.login-blueprint-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0.12;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
 }
 
 .heist-back-btn {
@@ -70,7 +83,7 @@
 /* Base styles for the neo-brutalist theme */
 .heist-font {
   font-family: 'Archivo Black', sans-serif;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .heist-mono {
@@ -80,10 +93,30 @@
 /* Responsive adjustments */
 @media (max-width: 1024px) {
   .money-heist-login-viewport main {
+    min-height: 100svh;
+    overflow: visible;
+  }
+
+  .money-heist-login-viewport main {
     flex-direction: column;
   }
   
   .login-image-side {
     display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .money-heist-login-viewport section {
+    border-left: 0;
+    box-shadow: none;
+  }
+
+  .money-heist-login-viewport h1 {
+    overflow-wrap: anywhere;
+  }
+
+  .heist-back-btn {
+    padding: 0.45rem 0.85rem;
   }
 }

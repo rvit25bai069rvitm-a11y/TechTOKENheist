@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useGameState } from '../hooks/useGameState';
-import { Users, Trophy, Activity, Bell, Crown, Clock3, AlertCircle } from 'lucide-react';
-import { getProfileAvatar, getProfileLabel } from '../data/profileAvatars';
+import { Users, Trophy, Activity, Bell, Clock3, AlertCircle } from 'lucide-react';
 
 const LobbyScreen = () => {
   const { teams, myTeam, gameState, matchHistory, notifications, sortedLeaderboard } = useGameState();

@@ -1,23 +1,24 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { GameStateProvider, useGameState } from './hooks/useGameState';
-import { LayoutDashboard, Swords, Crosshair, Settings, LogOut, Clock, Ban, Book, Eye, Zap, VenetianMask, Users } from 'lucide-react';
+import { LayoutDashboard, Swords, Crosshair, Book, Eye, Zap, VenetianMask, Users } from 'lucide-react';
 import CountdownOverlay from './components/CountdownOverlay';
-import LandingScreen from './screens/LandingScreen';
-import LoginScreen from './screens/LoginScreen';
-import LobbyScreen from './screens/LobbyScreen';
-import ArenaScreen from './screens/ArenaScreen';
-import BattleScreen from './screens/BattleScreen';
-import AdminScreen from './screens/AdminScreen';
-import RulebookScreen from './screens/RulebookScreen';
-import AboutScreen from './screens/AboutScreen';
-import DevsScreen from './screens/DevsScreen';
-import { getProfileAvatar, getProfileLabel } from './data/profileAvatars';
 import gdgLogo from '../assets/gdg.png';
 
 import './PlayerLayout.css';
 
+const LandingScreen = lazy(() => import('./screens/LandingScreen'));
+const LoginScreen = lazy(() => import('./screens/LoginScreen'));
+const LobbyScreen = lazy(() => import('./screens/LobbyScreen'));
+const ArenaScreen = lazy(() => import('./screens/ArenaScreen'));
+const BattleScreen = lazy(() => import('./screens/BattleScreen'));
+const AdminScreen = lazy(() => import('./screens/AdminScreen'));
+const RulebookScreen = lazy(() => import('./screens/RulebookScreen'));
+const AboutScreen = lazy(() => import('./screens/AboutScreen'));
+const DevsScreen = lazy(() => import('./screens/DevsScreen'));
+
 const PlayerTopBar = () => {
-  const { myTeam, logout, user, gameTimer } = useGameState();
+  const { myTeam, logout, gameTimer } = useGameState();
   const teamName = myTeam?.name || 'GUEST';
   const isEliminated = myTeam?.status === 'eliminated';
 
@@ -193,39 +194,41 @@ const AppContent = () => {
   return (
     <>
       <CountdownOverlay count={countdown} />
-      <Routes>
-        {/* Public */}
-        <Route path="/" element={<LandingScreen />} />
-        <Route path="/login" element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/lobby'} /> : <LoginScreen />} />
+      <Suspense fallback={<div className="route-loading" />}>
+        <Routes>
+          {/* Public */}
+          <Route path="/" element={<LandingScreen />} />
+          <Route path="/login" element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/lobby'} /> : <LoginScreen />} />
 
-        {/* Player Routes */}
-        <Route path="/lobby" element={
-          user ? <PlayerLayout><LobbyScreen /></PlayerLayout> : <Navigate to="/login" />
-        } />
-        <Route path="/arena" element={
-          user ? <PlayerLayout><ArenaScreen /></PlayerLayout> : <Navigate to="/login" />
-        } />
-        <Route path="/battle" element={
-          user ? <PlayerLayout><BattleScreen /></PlayerLayout> : <Navigate to="/login" />
-        } />
-        <Route path="/rulebook" element={
-          user ? <PlayerLayout><RulebookScreen /></PlayerLayout> : <Navigate to="/login" />
-        } />
-        <Route path="/about" element={
-          user ? <PlayerLayout><AboutScreen /></PlayerLayout> : <Navigate to="/login" />
-        } />
-        <Route path="/devs" element={
-          user ? <PlayerLayout><DevsScreen /></PlayerLayout> : <Navigate to="/login" />
-        } />
+          {/* Player Routes */}
+          <Route path="/lobby" element={
+            user ? <PlayerLayout><LobbyScreen /></PlayerLayout> : <Navigate to="/login" />
+          } />
+          <Route path="/arena" element={
+            user ? <PlayerLayout><ArenaScreen /></PlayerLayout> : <Navigate to="/login" />
+          } />
+          <Route path="/battle" element={
+            user ? <PlayerLayout><BattleScreen /></PlayerLayout> : <Navigate to="/login" />
+          } />
+          <Route path="/rulebook" element={
+            user ? <PlayerLayout><RulebookScreen /></PlayerLayout> : <Navigate to="/login" />
+          } />
+          <Route path="/about" element={
+            user ? <PlayerLayout><AboutScreen /></PlayerLayout> : <Navigate to="/login" />
+          } />
+          <Route path="/devs" element={
+            user ? <PlayerLayout><DevsScreen /></PlayerLayout> : <Navigate to="/login" />
+          } />
 
-        {/* Admin Routes */}
-        <Route path="/admin" element={
-          user && user.role === 'admin' ? <AdminLayout><AdminScreen /></AdminLayout> : <Navigate to="/login" />
-        } />
+          {/* Admin Routes */}
+          <Route path="/admin" element={
+            user && user.role === 'admin' ? <AdminLayout><AdminScreen /></AdminLayout> : <Navigate to="/login" />
+          } />
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Suspense>
     </>
   );
 };

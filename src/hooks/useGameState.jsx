@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { queryClient } from '../lib/queryClient'
 import supabase from '../lib/supabase'
 import { buildConstraintsFromHistory, getValidDomains, runMatchmaking } from '../utils/matchmaking'
@@ -145,12 +146,12 @@ const enforceWagerEliminations = async () => {
         time: new Date().toLocaleTimeString(),
       }))
     )
-  } catch (e) { }
+  } catch {
+    // Notifications are best-effort; elimination state is already persisted.
+  }
 
   return teamIds
 }
-
-import { persist } from 'zustand/middleware'
 
 const useGameStateStore = create(
   persist(
@@ -175,7 +176,7 @@ const useGameStateStore = create(
         return (async () => {
           try {
             // Admin login check (Credentials moved to database to prevent hardcoded exposure)
-            const { data: authRecord, error: authError } = await supabase
+            const { data: authRecord } = await supabase
               .from('system')
               .select('status')
               .eq('key', 'admin_credential')
@@ -266,7 +267,9 @@ const useGameStateStore = create(
         await supabase.from('system').update({ is_game_active: false, is_paused: true, paused_at: Date.now(), status: 'paused' }).eq('key', 'game')
         try {
           await supabase.from('notifications').insert([{ message: `Mission on HOLD by Command.`, time: new Date().toLocaleTimeString() }])
-        } catch (e) { }
+        } catch {
+          // Pause notification is best-effort.
+        }
       },
       resetGame: async () => {
         // Clear runtime state and credentials, but keep the 24 profile identities in place.
@@ -304,7 +307,9 @@ const useGameStateStore = create(
         await supabase.from('system').update({ phase: newPhase }).eq('key', 'game')
         try {
           await supabase.from('notifications').insert([{ message: `System override: INITIATING ${newPhase === 'phase2' ? 'PHASE 02 (WAGER)' : 'PHASE 01 (STANDARD)'}.`, time: new Date().toLocaleTimeString() }])
-        } catch (e) { }
+        } catch {
+          // Phase notification is best-effort.
+        }
         if (newPhase === 'phase2') {
           await enforceWagerEliminations()
         }
@@ -329,7 +334,9 @@ const useGameStateStore = create(
         } else {
           try {
             await supabase.from('notifications').insert([{ message: `New crew recruited: ${teamData.name}.`, time: new Date().toLocaleTimeString() }])
-          } catch (e) { }
+          } catch {
+            // Team creation notification is best-effort.
+          }
         }
 
         if (get().triggerFetchPublicState) {
@@ -345,7 +352,7 @@ const useGameStateStore = create(
         get().triggerFetchPublicState?.()
       },
       updateTokens: async (teamId, amount, reason) => {
-        const { data: team } = await supabase.from('teams').select('tokens,status').eq('id', teamId).limit(1).maybeSingle()
+        const { data: team } = await supabase.from('teams').select('name,tokens,status').eq('id', teamId).limit(1).maybeSingle()
         if (!team) return
         const newTokens = team.tokens + amount;
         const updates = { tokens: Math.max(0, newTokens), last_token_update_time: Date.now() };
@@ -378,10 +385,12 @@ const useGameStateStore = create(
         await supabase.from('teams').update(updates).eq('id', teamId);
         try {
           await supabase.from('notifications').insert([{
-            message: `Admin adjusted tokens for ${team?.name || 'Unknown'}: ${amount > 0 ? '+' : ''}${amount} TKN.`,
+            message: `Admin adjusted tokens for ${team?.name || 'Unknown'}: ${amount > 0 ? '+' : ''}${amount} TKN${reason ? ` (${reason})` : ''}.`,
             time: new Date().toLocaleTimeString()
           }])
-        } catch (e) { }
+        } catch {
+          // Token adjustment notification is best-effort.
+        }
         get().triggerFetchPublicState?.();
       },
       recoverFromTimeout: async (teamId, teamName) => {
@@ -422,7 +431,9 @@ const useGameStateStore = create(
         await supabase.from('teams').update({ status: 'fighting' }).in('id', [teamAId, teamBId])
         try {
           await supabase.from('notifications').insert([{ message: `Match started: ${teamA?.name || teamAId} vs ${teamB?.name || teamBId}`, time: new Date().toLocaleTimeString() }])
-        } catch (e) { }
+        } catch {
+          // Match-start notification is best-effort.
+        }
         return match
       },
       declareWinner: async (matchId, winnerId) => {
@@ -504,18 +515,22 @@ const useGameStateStore = create(
             { team: winnerTeam.name, change: `+${winDelta}`, reason: isWager ? 'Wager win' : 'Match win', timestamp: new Date().toLocaleTimeString() },
             { team: loserTeam.name, change: `${loseDelta}`, reason: isWager ? 'Wager loss' : 'Match loss', timestamp: new Date().toLocaleTimeString() },
           ])
-        } catch (e) { }
+        } catch {
+          // Token history is best-effort; team token state is authoritative.
+        }
 
         try {
           await supabase.from('notifications').insert([
             { message: `${winnerTeam.name} defeated ${loserTeam.name}${isWager ? ' (WAGER)' : ''}`, time: new Date().toLocaleTimeString() },
           ])
-        } catch (e) { }
+        } catch {
+          // Match result notification is best-effort.
+        }
 
         try {
           await supabase.from('match_history')
             .insert([{ id: `mh_${matchId}`, winner: winnerTeam.name, loser: loserTeam.name, domain: match.domain, timestamp: new Date().toLocaleTimeString(), is_wager: isWager }])
-        } catch (e) {
+        } catch {
           await supabase.from('match_history')
             .insert([{ id: `mh_${matchId}`, winner: winnerTeam.name, loser: loserTeam.name, domain: match.domain, timestamp: new Date().toLocaleTimeString() }])
         }
@@ -596,6 +611,7 @@ const useGameSocketBridge = () => {
   const socketUser = useGameStateStore((state) => state.user)
   const socketTeams = useGameStateStore((state) => state.teams)
   const setGameTimer = useGameStateStore((state) => state.setGameTimer)
+  const { isGameActive, isPaused, gameStartedAt, pausedAt } = gameState
 
   useEffect(() => {
     let channel = null
@@ -724,7 +740,9 @@ const useGameSocketBridge = () => {
     return () => {
       try {
         if (channel) channel.unsubscribe()
-      } catch (e) { }
+      } catch {
+        // Ignore unsubscribe errors during route teardown.
+      }
       if (fallbackPollInterval) clearInterval(fallbackPollInterval)
       fallbackPollInterval = null
       if (countdownInterval) clearInterval(countdownInterval)
@@ -735,13 +753,14 @@ const useGameSocketBridge = () => {
   useEffect(() => {
     if (timerInterval) clearInterval(timerInterval)
     timerInterval = null
+    const timerState = { isGameActive, isPaused, gameStartedAt, pausedAt }
 
-    if (gameState.isGameActive && gameState.gameStartedAt) {
-      const tick = () => setGameTimer(getGameTimer(gameState))
+    if (isGameActive && gameStartedAt) {
+      const tick = () => setGameTimer(getGameTimer(timerState))
       tick()
       timerInterval = setInterval(tick, 1000)
-    } else if (gameState.isPaused && gameState.gameStartedAt && gameState.pausedAt) {
-      setGameTimer(getGameTimer(gameState))
+    } else if (isPaused && gameStartedAt && pausedAt) {
+      setGameTimer(getGameTimer(timerState))
     } else {
       setGameTimer('00:00:00')
     }
@@ -749,7 +768,7 @@ const useGameSocketBridge = () => {
     return () => {
       if (timerInterval) clearInterval(timerInterval)
     }
-  }, [gameState.isGameActive, gameState.isPaused, gameState.gameStartedAt, gameState.pausedAt, setGameTimer])
+  }, [isGameActive, isPaused, gameStartedAt, pausedAt, setGameTimer])
 
   // Real-time timeout recovery interval
   useEffect(() => {
