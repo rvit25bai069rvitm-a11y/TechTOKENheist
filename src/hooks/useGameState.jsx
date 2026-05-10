@@ -174,7 +174,7 @@ const useGameStateStore = create(
   login: (username, password) => {
     return (async () => {
       try {
-        if (username === 'admin' && password === 'admin123') {
+        if (username === 'proffesor' && password === 'iamadmin') {
           set({ user: { role: 'admin', teamId: null, teamName: null } })
           return { success: true, role: 'admin' }
         }

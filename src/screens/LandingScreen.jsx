@@ -186,7 +186,6 @@ const LandingScreen = () => {
               <p className="init-type-1">El mayor robo comienza ahora...</p>
               <div className="init-glitch-replace">
                 <p className="init-type-2">El sistema ya est&aacute; en marcha.</p>
-                <p className="init-type-sub">El sistema ya est&aacute; en marcha.</p>
               </div>
             </div>
             <div className="scroll-pulse-indicator">
