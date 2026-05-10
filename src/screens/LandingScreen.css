@@ -228,7 +228,11 @@ html {
 .typewriter-box {
   text-align: center;
   position: relative;
-  height: 100px;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
 }
 
 .init-type-1 {
@@ -242,24 +246,17 @@ html {
 }
 
 .init-glitch-replace {
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: relative;
   width: 100%;
   opacity: 0;
   animation: glitchReplace 0.5s 4s forwards;
 }
 
-.init-type-2 {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 2rem;
-}
 
 .init-type-sub {
   font-family: 'Courier New', Courier, monospace;
   font-size: 1.2rem;
   color: #888;
-  margin-top: 1rem;
   opacity: 0;
   animation: slowFadeIn 2s 5s forwards;
 }
@@ -267,8 +264,24 @@ html {
 .scroll-pulse-indicator {
   position: absolute;
   bottom: 40px;
-  opacity: 0;
-  animation: slowFadeIn 2s 6s forwards;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  transition: opacity 1s ease-in-out;
+}
+
+.scroll-text {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.8rem;
+  letter-spacing: 4px;
+  color: rgba(255, 255, 255, 0.6);
+  animation: pulseOpacity 2s infinite;
+}
+
+@keyframes pulseOpacity {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 .arrow {
@@ -1185,8 +1198,7 @@ html {
     font-size: 1.5rem;
   }
 
-  .init-type-1,
-  .init-type-2 {
+  .init-type-1 {
     font-size: 1.2rem;
   }
 

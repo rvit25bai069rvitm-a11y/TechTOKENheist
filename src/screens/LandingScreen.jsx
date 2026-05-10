@@ -30,6 +30,7 @@ const LandingScreen = () => {
   const [scrollY, setScrollY] = useState(0);
   const [mousePos, setMousePos] = useState({ x: -100, y: -100 });
   const [isHovering, setIsHovering] = useState(false);
+  const [showScrollHint, setShowScrollHint] = useState(false);
   const audioRef = useRef(null);
 
   const handleStart = () => {
@@ -123,6 +124,18 @@ const LandingScreen = () => {
     return () => observer.disconnect();
   }, [started]);
 
+  useEffect(() => {
+    if (!started) return;
+
+    const timer = setTimeout(() => {
+      if (window.scrollY < 50) {
+        setShowScrollHint(true);
+      }
+    }, 4000); // Wait for typewriter to mostly finish
+
+    return () => clearTimeout(timer);
+  }, [started]);
+
   // Compute derived visual properties from scroll position
   // 100vh = window.innerHeight. Assuming sections are at least 100vh.
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
@@ -185,10 +198,11 @@ const LandingScreen = () => {
             <div className="typewriter-box">
               <p className="init-type-1">El mayor robo comienza ahora...</p>
               <div className="init-glitch-replace">
-                <p className="init-type-2">El sistema ya est&aacute; en marcha.</p>
+                <p className="init-type-sub">El sistema ya est&aacute; en marcha.</p>
               </div>
             </div>
-            <div className="scroll-pulse-indicator">
+            <div className="scroll-pulse-indicator" style={{ opacity: showScrollHint && scrollY < 50 ? 1 : 0 }}>
+              <p className="scroll-text">SCROLL DOWN</p>
               <div className="arrow"></div>
             </div>
           </section>
@@ -395,7 +409,7 @@ const LandingScreen = () => {
                   ENTER HEIST
                 </motion.button>
 
-                <motion.div 
+                <motion.div
                   className="mt-12 flex items-center gap-4 opacity-30 group"
                   initial={{ opacity: 0 }}
                   whileInView={{ opacity: 0.3 }}
