@@ -1,19 +1,18 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useGameState } from '../hooks/useGameState';
-import { Swords, Crosshair, Ban, Lock, Zap, Search, Timer, Skull, VenetianMask } from 'lucide-react';
+import { Swords, Crosshair, Ban, Lock, Zap, Search, Timer, ShieldAlert, AlertCircle } from 'lucide-react';
 import { buildQueueDiagnostics } from '../utils/matchmaking';
-import './AdminScreen.css';
 
 const ArenaScreen = () => {
   const { teams, activeMatches, myTeam, gameState, isInQueue, myQueueEntry, joinQueue, matchmakingQueue, matchConstraints } = useGameState();
 
   if (!gameState.isGameActive && !gameState.isPaused) {
     return (
-      <div className="panel-container border-2 border-gray-600 p-12 text-center relative z-10 heist-bg">
-        <Lock size={64} className="text-gray-500 mb-6 mx-auto" />
-        <h2 className="heist-font text-heist-yellow text-4xl mb-2 tracking-widest">ARENA LOCKED</h2>
-        <p className="heist-mono text-gray-400 text-lg">Awaiting The Professor's authorization to commence.</p>
+      <div className="bg-[#0a0a0a]/80 backdrop-blur-md border border-red-900/30 rounded-sm p-16 text-center shadow-2xl h-full flex flex-col justify-center items-center">
+        <Lock size={64} className="text-gray-600 mb-6 mx-auto" />
+        <h2 className="heist-font text-gray-400 text-5xl mb-4 tracking-widest uppercase">ARENA LOCKED</h2>
+        <p className="heist-mono text-gray-500 text-sm tracking-widest uppercase max-w-md mx-auto">Awaiting The Professor's authorization to commence matchmaking.</p>
       </div>
     );
   }
@@ -71,201 +70,299 @@ const ArenaScreen = () => {
   const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } };
 
   return (
-    <motion.div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 min-h-screen heist-bg text-white pb-20 relative overflow-hidden" variants={containerVariants} initial="hidden" animate="visible">
+    <motion.div className="flex flex-col gap-8 text-white pb-20 relative h-full" variants={containerVariants} initial="hidden" animate="visible">
       
-      {/* Background elements */}
-      <div className="absolute inset-0 bg-blueprint opacity-10 pointer-events-none z-0"></div>
-
-      {/* Phase Banner */}
-      <motion.div variants={itemVariants} className={`panel-container border-2 p-4 relative z-10 ${isPhase2 ? 'border-heist-red bg-red-900 bg-opacity-20' : 'border-heist-teal bg-teal-900 bg-opacity-20'}`}>
-        <span className={`heist-font text-2xl tracking-widest ${isPhase2 ? 'text-heist-red' : 'text-heist-teal'}`}>
-          {isPhase2 ? '🔥 PHASE 2 — WAGER MODE · NO LIMITS · WINNER TAKES ALL' : '📋 PHASE 1 — STANDARD MODE · ±3 TOKEN RANGE · +1/-1 STAKES'}
-        </span>
+      {/* Header Section */}
+      <motion.div variants={itemVariants} className="heist-header-tactical flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="heist-title-main">TACTICAL <span className="heist-title-accent">ARENA</span></h1>
+          <span className="heist-subtitle-mono">NEURAL NETWORK MATCHMAKING SYSTEM</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className={`heist-card px-6 py-3 flex items-center gap-4 border-l-4 ${isPhase2 ? 'border-l-red-600' : 'border-l-gray-600'}`}>
+            <div className="flex flex-col">
+              <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest mb-1">CURRENT SECTOR</span>
+              <span className={`heist-font text-2xl tracking-widest uppercase ${isPhase2 ? 'text-red-500' : 'text-gray-300'}`}>
+                {isPhase2 ? 'PHASE 2: WAGER' : 'PHASE 1: STANDARD'}
+              </span>
+            </div>
+            {isPhase2 ? <Zap className="text-red-500 animate-pulse" size={24} /> : <ShieldAlert className="text-gray-400" size={24} />}
+          </div>
+        </div>
       </motion.div>
 
       {isPaused && (
-        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-yellow bg-yellow-900 bg-opacity-20 p-4 relative z-10">
-          <span className="heist-font text-heist-yellow text-2xl tracking-widest">⏸ OPERATION PAUSED — ALL SYSTEMS FROZEN.</span>
+        <motion.div variants={itemVariants} className="heist-card border-red-600/50 bg-red-950/10 p-6 flex items-center gap-6 relative">
+          <div className="scanline-overlay"></div>
+          <div className="p-3 bg-red-600/20 rounded-sm">
+            <Lock className="text-red-600" size={32} />
+          </div>
+          <div>
+            <span className="heist-font text-red-500 text-3xl tracking-widest uppercase block mb-1">SYSTEMS FROZEN</span>
+            <span className="heist-mono text-gray-400 text-[10px] tracking-widest uppercase">ALL OPERATIONS SUSPENDED BY THE PROFESSOR</span>
+          </div>
         </motion.div>
       )}
 
-      {/* Queue Action */}
+      {/* Primary Action Card */}
       {myTeam && !amIEliminated && !amITimeout && (
-        <motion.div variants={itemVariants} className="panel-container border-2 border-[#333] p-8 text-center relative z-10 overflow-hidden shadow-2xl">
-          {/* subtle background pulse if in queue */}
-          {isInQueue && !myQueueEntry?.matchedWith && <div className="absolute inset-0 bg-heist-teal opacity-5 animate-pulse pointer-events-none"></div>}
+        <motion.div variants={itemVariants} className="heist-card relative overflow-hidden group">
+          <div className="scanline-overlay"></div>
+          <div className="blueprint-grid absolute inset-0 opacity-20"></div>
+          
+          <div className="heist-card-content min-h-[350px] flex flex-col items-center justify-center relative z-10 p-12 text-center">
+            {isInQueue && !myQueueEntry?.matchedWith && (
+              <div className="absolute inset-0 bg-red-600/5 animate-pulse pointer-events-none"></div>
+            )}
 
-          {isInQueue ? (
-            myQueueEntry?.matchedWith ? (
-              <div className="flex flex-col items-center">
-                <Swords size={64} className="text-heist-red mb-4 animate-pulse" />
-                <h2 className="heist-font text-heist-red text-5xl mb-2 tracking-widest">TARGET ACQUIRED!</h2>
-                <div className="heist-mono text-xl mb-4 p-4 border-2 border-heist-red bg-black bg-opacity-70 inline-flex items-center gap-4">
-                  <span className="text-gray-500">VS</span> 
-                  <span className="text-white text-2xl font-bold">{teams.find(t => t.id === myQueueEntry.matchedWith)?.name || 'UNKNOWN CREW'}</span>
+            {isInQueue ? (
+              myQueueEntry?.matchedWith ? (
+                <div className="flex flex-col items-center w-full">
+                  <div className="relative mb-8">
+                    <Swords size={80} className="text-red-600 animate-pulse" />
+                    <div className="absolute inset-0 border-4 border-red-600 rounded-full animate-ping opacity-20"></div>
+                  </div>
+                  
+                  <h2 className="heist-font text-white text-7xl mb-6 tracking-tighter uppercase">TARGET <span className="text-red-600">LOCKED</span></h2>
+                  
+                  <div className="flex flex-col md:flex-row items-center gap-12 mb-10 w-full max-w-4xl justify-center">
+                    <div className="flex flex-col items-center">
+                      <span className="heist-mono text-gray-500 text-[10px] mb-2 uppercase tracking-widest">FRIENDLY</span>
+                      <span className="heist-font text-4xl text-white tracking-widest uppercase">{myTeam.name}</span>
+                    </div>
+                    
+                    <div className="flex flex-col items-center">
+                      <div className="h-px w-20 bg-red-900 mb-4"></div>
+                      <span className="heist-mono text-red-500 text-xl font-bold px-6 py-2 border border-red-600/30 bg-red-950/20">VERSUS</span>
+                      <div className="h-px w-20 bg-red-900 mt-4"></div>
+                    </div>
+                    
+                    <div className="flex flex-col items-center">
+                      <span className="heist-mono text-gray-500 text-[10px] mb-2 uppercase tracking-widest">HOSTILE</span>
+                      <span className="heist-font text-4xl text-red-600 tracking-widest uppercase">
+                        {teams.find(t => t.id === myQueueEntry.matchedWith)?.name || 'IDENTIFYING...'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="heist-badge badge-red px-8 py-2 animate-pulse">
+                    PROCEED TO BRIEFING STATION IMMEDIATELY
+                  </div>
                 </div>
-                <p className="heist-mono text-gray-400 text-lg uppercase">Proceed to the briefing room for the Domain Spin immediately.</p>
+              ) : (
+                <div className="flex flex-col items-center">
+                  <div className="relative mb-10">
+                    <div className="absolute -inset-12 border border-red-600/20 rounded-full animate-[spin_10s_linear_infinite]"></div>
+                    <div className="absolute -inset-8 border border-red-600/10 rounded-full animate-[spin_15s_linear_infinite_reverse]"></div>
+                    <Search size={80} className="text-red-600 opacity-80" />
+                  </div>
+                  
+                  <h2 className="heist-font text-white text-6xl mb-4 tracking-widest uppercase">SCANNING <span className="text-red-600">SIGNALS</span></h2>
+                  <p className="heist-mono text-gray-400 text-xs tracking-[0.3em] uppercase mb-8">
+                    {isPhase2 ? 'ANY TARGET DETECTED IS ELIGIBLE' : 'FILTERING BY TKN PROXIMITY'}
+                  </p>
+                  
+                  <div className="w-80 h-1 bg-white/5 relative overflow-hidden rounded-full">
+                    <motion.div 
+                      className="absolute top-0 left-0 h-full w-1/3 bg-red-600"
+                      animate={{ left: ['-33%', '100%'] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                    />
+                  </div>
+                </div>
+              )
+            ) : myTeam.status === 'fighting' ? (
+              <div className="flex flex-col items-center">
+                <div className="p-8 bg-red-950/30 border border-red-600 rounded-sm mb-8 pulse-red">
+                  <Swords size={80} className="text-red-600" />
+                </div>
+                <h2 className="heist-font text-red-600 text-7xl mb-4 tracking-tighter uppercase">INFILTRATION ACTIVE</h2>
+                <p className="heist-mono text-gray-400 text-xs tracking-[0.2em] uppercase">MONITORING LIVE INTEL FEED</p>
               </div>
             ) : (
-              <div className="flex flex-col items-center">
-                <Search size={64} className="text-heist-teal mb-4 animate-pulse" />
-                <h2 className="heist-font text-heist-teal text-4xl mb-2 tracking-widest">HUNTING FOR TARGET...</h2>
-                <p className="heist-mono text-gray-400 text-lg uppercase mb-6">
-                  {isPhase2 ? 'WAGER MODE: ANY CREW CAN BE TARGETED' : `SCANNING FOR CREWS WITHIN ±3 TOKENS OF YOUR ${myTeam.tokens} TKN`}
+              <div className="flex flex-col items-center opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-500">
+                <Crosshair size={80} className="text-gray-500 mb-8" />
+                <h2 className="heist-font text-gray-400 text-6xl mb-4 tracking-widest uppercase">AUTO-QUEUED</h2>
+                <p className="heist-mono text-gray-500 text-xs tracking-[0.2em] uppercase max-w-xl mx-auto leading-relaxed">
+                  SYSTEM IS SCANNING FOR ELIGIBLE TARGETS. YOUR CREW WILL BE DEPLOYED AUTOMATICALLY UPON DETECTION.
                 </p>
               </div>
-            )
-          ) : myTeam.status === 'fighting' ? (
-            <div className="flex flex-col items-center">
-              <Swords size={64} className="text-heist-red mb-4 animate-bounce" />
-              <h2 className="heist-font text-heist-red text-5xl mb-2 tracking-widest">INFILTRATION ACTIVE!</h2>
-              <p className="heist-mono text-gray-400 text-lg uppercase">Monitor the Battle feed for live intel.</p>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center">
-              <Crosshair size={64} className="text-heist-teal mb-4 opacity-70" />
-              <h2 className="heist-font text-white text-4xl mb-2 tracking-widest">AUTO-MATCH ENGAGED</h2>
-              <p className="heist-mono text-gray-400 text-lg uppercase max-w-lg mx-auto mb-6">
-                You will be queued automatically and paired with an eligible target.
-              </p>
-              {(isPaused || amIBusy) && (
-                <div className="heist-mono text-heist-yellow text-sm uppercase">
-                  Matchmaking will resume automatically when your crew is cleared.
-                </div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </motion.div>
       )}
 
       {/* Queue Diagnostics */}
       {isInQueue && myQueueDiagnostics && (
-        <motion.div variants={itemVariants} className="panel-container border-2 border-[#333] p-6 relative z-10">
-          <div className="flex items-center justify-between mb-4 border-b-2 border-gray-700 pb-3">
-            <h3 className="heist-font text-heist-yellow text-2xl tracking-widest m-0">SCAN DIAGNOSTICS</h3>
-            <span className={`px-3 py-1 heist-mono text-xs uppercase border ${myQueueDiagnostics.hasAnyPossibleMatch ? 'border-heist-teal text-heist-teal' : 'border-heist-yellow text-heist-yellow'}`}>
+        <motion.div variants={itemVariants} className="heist-card">
+          <div className="heist-card-header flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Search className="text-gray-400" size={20} />
+              <h3 className="heist-font text-gray-200 text-2xl tracking-widest m-0 uppercase">NETWORK DIAGNOSTICS</h3>
+            </div>
+            <div className={`heist-badge ${myQueueDiagnostics.hasAnyPossibleMatch ? 'badge-teal' : 'badge-red'}`}>
               {myQueueDiagnostics.hasAnyPossibleMatch ? 'TARGETS ELIGIBLE' : 'SCAN BLOCKED'}
-            </span>
+            </div>
           </div>
-          {myQueueDiagnostics.blockers.length === 0 && (
-            <div className="heist-mono text-gray-400 text-sm uppercase">No rival crews scanning right now. You will be matched upon detection.</div>
-          )}
-          <div className="flex flex-col gap-2">
-            {myQueueDiagnostics.blockers.map((b) => (
-              <div key={b.teamId} className="p-3 border border-gray-800 bg-black bg-opacity-50">
-                <span className="heist-mono text-sm uppercase">
-                  <span className="text-gray-500">VS</span> <span className="text-white">{b.teamName}:</span> {b.canMatchNow ? <span className="text-heist-teal">Eligible now</span> : <span className="text-heist-red">{b.reasons.join(' | ')}</span>}
-                </span>
+          
+          <div className="heist-card-content">
+            {myQueueDiagnostics.blockers.length === 0 && (
+              <div className="heist-mono text-gray-500 text-xs uppercase tracking-widest flex items-center gap-3 py-4 justify-center bg-white/5 border border-white/5 mb-4">
+                <AlertCircle size={16} /> NO HOSTILE CREWS DETECTED IN NETWORK RANGE
               </div>
-            ))}
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {myQueueDiagnostics.blockers.map((b) => (
+                <div key={b.teamId} className="p-4 border border-white/5 bg-black/40 flex justify-between items-center group hover:border-white/20 transition-all">
+                  <div className="flex flex-col">
+                    <span className="heist-mono text-[10px] text-gray-600 uppercase mb-1">RIVAL CREW</span>
+                    <span className="heist-font text-xl tracking-widest text-white group-hover:text-red-500 transition-colors">{b.teamName}</span>
+                  </div>
+                  <div className={`heist-badge ${b.canMatchNow ? 'badge-teal' : 'badge-red'} text-[9px]`}>
+                    {b.canMatchNow ? 'LOCK POSSIBLE' : b.reasons[0]}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </motion.div>
       )}
 
-      {/* Stats row */}
-      <motion.div variants={itemVariants} className="panel-container border-2 border-[#333] p-6 relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 border border-heist-red bg-red-900 bg-opacity-10 text-center">
-            <div className="heist-mono text-gray-400 text-xs uppercase mb-1">CREWS IN COMBAT</div>
-            <div className="heist-font text-heist-red text-4xl">{fightingTeams.length}</div>
+      {/* Stats Readout */}
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {[
+          { label: 'ACTIVE OPERATIONS', value: fightingTeams.length, icon: <Swords size={20}/>, color: 'text-red-600' },
+          { label: 'CREWS SCANNING', value: waitingQueue.length, icon: <Search size={20}/>, color: 'text-white' },
+          { label: 'REGISTERED CREWS', value: teams.length, icon: <Users size={20}/>, color: 'text-gray-500' }
+        ].map((stat, i) => (
+          <div key={i} className="heist-card p-6 flex flex-col items-center text-center">
+            <div className={`mb-4 p-3 bg-white/5 rounded-sm ${stat.color} opacity-80`}>
+              {stat.icon}
+            </div>
+            <span className="heist-mono text-[10px] text-gray-600 tracking-[0.2em] uppercase mb-2">{stat.label}</span>
+            <div className={`heist-font text-6xl ${stat.color}`}>{stat.value}</div>
           </div>
-          <div className="p-4 border border-heist-teal bg-teal-900 bg-opacity-10 text-center">
-            <div className="heist-mono text-gray-400 text-xs uppercase mb-1">CREWS SCANNING</div>
-            <div className="heist-font text-heist-teal text-4xl">{waitingQueue.length}</div>
-          </div>
-          <div className="p-4 border border-gray-600 bg-gray-900 bg-opacity-30 text-center">
-            <div className="heist-mono text-gray-400 text-xs uppercase mb-1">TOTAL CREWS</div>
-            <div className="heist-font text-white text-4xl">{teams.length}</div>
-          </div>
-        </div>
+        ))}
       </motion.div>
 
-      {/* Timeout Banner */}
-      {amITimeout && myTeam.timeoutUntil && (
-        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-yellow p-8 text-center relative z-10 bg-black">
-          <Timer size={64} className="text-heist-yellow mb-4 mx-auto animate-pulse" />
-          <h2 className="heist-font text-heist-yellow text-5xl mb-2 tracking-widest">TIMEOUT</h2>
-          <p className="heist-mono text-gray-400 text-lg uppercase mb-6">You hit 0 tokens. Wait for the timeout to expire and you'll reset to 1 token.</p>
-          <TimeoutCountdown until={myTeam.timeoutUntil} />
-        </motion.div>
-      )}
-
-      {/* Eliminated Banner */}
-      {amIEliminated && (
-        <motion.div variants={itemVariants} className="panel-container border-2 border-heist-red p-8 text-center relative z-10 bg-black">
-          <Ban size={64} className="text-heist-red mb-4 mx-auto" />
-          <h2 className="heist-font text-heist-red text-5xl mb-2 tracking-widest">ELIMINATED</h2>
-          <p className="heist-mono text-gray-400 text-lg uppercase">You have been permanently eliminated. Spectate the remaining operations.</p>
-        </motion.div>
-      )}
-
-      {/* Live Matches */}
-      <motion.div variants={itemVariants} className="panel-container border-2 border-heist-red p-6 relative z-10 shadow-[0_0_20px_rgba(211,47,47,0.2)]">
-        <div className="flex items-center justify-between mb-6 border-b-2 border-heist-red pb-3">
+      {/* Live Matches Grid */}
+      <motion.div variants={itemVariants} className="heist-card">
+        <div className="heist-card-header flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Swords className="text-heist-red animate-pulse" size={28} />
-            <h2 className="heist-font text-heist-red text-3xl tracking-wider m-0">LIVE OPERATIONS</h2>
+            <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
+            <h2 className="heist-font text-white text-3xl tracking-widest m-0 uppercase">LIVE INTEL FEED</h2>
           </div>
-          <div className="px-3 py-1 bg-heist-red text-white heist-mono text-sm">{activeMatches.length} ACTIVE</div>
+          <div className="heist-badge badge-red">{activeMatches.length} OPERATIONS ACTIVE</div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {activeMatches.map(match => (
-            <div key={match.id} className="p-4 border border-heist-red bg-black bg-opacity-70 relative overflow-hidden group">
-              {/* background scanline */}
-              <div className="absolute top-0 left-0 w-full h-1 bg-heist-red opacity-50 transform -translate-y-full group-hover:animate-scanline"></div>
-              
-              <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-2">
-                <span className="px-2 py-1 border border-heist-teal text-heist-teal heist-mono text-[10px] uppercase">{match.domain}</span>
-                <span className={`px-2 py-1 heist-mono text-[10px] uppercase ${match.isWager ? 'bg-heist-red text-white' : 'border border-heist-yellow text-heist-yellow'}`}>{match.isWager ? 'WAGER' : '±1'}</span>
-              </div>
-              <div className="flex justify-between items-center text-center">
-                <div className="heist-font text-2xl text-white flex-1 truncate">{match.teamA.name}</div>
-                <div className="heist-font text-heist-red text-3xl px-3">VS</div>
-                <div className="heist-font text-2xl text-white flex-1 truncate">{match.teamB.name}</div>
-              </div>
-            </div>
-          ))}
-          {activeMatches.length === 0 && (
-            <div className="heist-mono text-gray-500 uppercase col-span-full text-center py-8">
-              NO LIVE OPERATIONS AT THIS TIME.
-            </div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* All Teams */}
-      <motion.div variants={itemVariants} className="panel-container border-2 border-[#333] p-6 relative z-10 bg-black bg-opacity-80">
-        <div className="flex items-center gap-3 mb-6 border-b-2 border-gray-700 pb-3">
-          <Crosshair className="text-heist-teal" size={28} />
-          <h2 className="heist-font text-white text-3xl tracking-wider m-0">ALL CREWS</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {teams.filter(t => !myTeam || t.id !== myTeam.id).map(team => {
-            const isEliminated = team.status === 'eliminated';
-            const isTimeout = team.status === 'timeout';
-            return (
-              <div key={team.id} className={`p-4 border ${isEliminated ? 'border-heist-red bg-red-900 bg-opacity-10' : isTimeout ? 'border-heist-yellow bg-yellow-900 bg-opacity-10' : 'border-gray-800 hover:border-gray-500'} transition-colors relative`}>
-                <div className="flex justify-between items-center mb-3">
-                  <div className={`heist-font text-2xl truncate pr-2 ${isEliminated ? 'text-heist-red line-through' : 'text-white'}`}>{team.name}</div>
-                  <span className={`px-2 py-0.5 heist-mono text-[10px] uppercase border ${isEliminated ? 'border-heist-red text-heist-red' : isTimeout ? 'border-heist-yellow text-heist-yellow' : team.status === 'idle' ? 'border-heist-teal text-heist-teal' : team.status === 'fighting' ? 'border-heist-red bg-heist-red text-white' : 'border-gray-500 text-gray-500'}`}>
-                    {team.status}
+        <div className="heist-card-content">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {activeMatches.map(match => (
+              <div key={match.id} className="heist-card bg-black/60 border-white/5 hover:border-red-600/30 transition-all p-6 group">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="heist-badge badge-gray text-[8px]">{match.domain}</span>
+                  <span className={`heist-badge ${match.isWager ? 'badge-red' : 'badge-teal'} text-[8px]`}>
+                    {match.isWager ? 'WAGER' : 'STANDARD'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <div className={`px-2 py-1 heist-font text-xl ${isEliminated ? 'text-heist-red' : 'text-heist-yellow border-b border-heist-yellow'}`}>{team.tokens} TKN</div>
-                  <div className="heist-mono text-gray-500 text-[10px] uppercase">{team.members} members</div>
+                <div className="flex items-center justify-between text-center gap-4">
+                  <div className="flex flex-col items-center flex-1 min-w-0">
+                    <div className="heist-font text-xl text-white truncate w-full tracking-widest">{match.teamA.name}</div>
+                    <div className="heist-mono text-[8px] text-gray-600 mt-1 uppercase">ASSAULT</div>
+                  </div>
+                  <div className="heist-font text-red-600 text-xl font-bold group-hover:scale-125 transition-transform">VS</div>
+                  <div className="flex flex-col items-center flex-1 min-w-0">
+                    <div className="heist-font text-xl text-white truncate w-full tracking-widest">{match.teamB.name}</div>
+                    <div className="heist-mono text-[8px] text-gray-600 mt-1 uppercase">DEFENSE</div>
+                  </div>
                 </div>
               </div>
-            );
-          })}
+            ))}
+            {activeMatches.length === 0 && (
+              <div className="heist-mono text-gray-700 text-xs tracking-widest uppercase col-span-full text-center py-20 bg-white/2 border border-dashed border-white/5">
+                NO ACTIVE OPERATIONS DETECTED IN THE GRID.
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Penalty States */}
+      {(amITimeout || amIEliminated) && (
+        <motion.div variants={itemVariants} className="heist-card border-red-900/50 p-12 text-center bg-red-950/10">
+          <div className="scanline-overlay"></div>
+          {amITimeout ? (
+             <>
+               <Timer size={80} className="text-yellow-500 mb-8 mx-auto animate-pulse" />
+               <h2 className="heist-font text-yellow-500 text-7xl mb-4 tracking-tighter uppercase">TIMEOUT ACTIVE</h2>
+               <p className="heist-mono text-gray-400 text-xs tracking-[0.2em] uppercase mb-12 max-w-xl mx-auto leading-relaxed">
+                 RESOURCES DEPLETED. SYSTEM RECALIBRATION IN PROGRESS. STANDBY FOR AUTOMATIC RESET.
+               </p>
+               <TimeoutCountdown until={myTeam.timeoutUntil} />
+             </>
+          ) : (
+            <>
+              <Ban size={80} className="text-red-600 mb-8 mx-auto" />
+              <h2 className="heist-font text-red-600 text-7xl mb-4 tracking-tighter uppercase">TERMINATED</h2>
+              <p className="heist-mono text-gray-400 text-xs tracking-[0.2em] uppercase leading-relaxed">
+                YOUR PERMIT HAS BEEN REVOKED. OPERATION OVER.
+              </p>
+            </>
+          )}
+        </motion.div>
+      )}
+
+      {/* All Teams Grid */}
+      <motion.div variants={itemVariants} className="heist-card mb-12">
+        <div className="heist-card-header flex items-center gap-3">
+          <Users className="text-gray-400" size={24} />
+          <h2 className="heist-font text-white text-3xl tracking-widest m-0 uppercase">CREW ROSTER</h2>
+        </div>
+        <div className="heist-card-content">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {teams.filter(t => !myTeam || t.id !== myTeam.id).map(team => {
+              const isEliminated = team.status === 'eliminated';
+              const isTimeout = team.status === 'timeout';
+              const isFighting = team.status === 'fighting';
+              
+              return (
+                <div key={team.id} className={`p-5 heist-card transition-all duration-300 ${
+                  isEliminated ? 'opacity-40 grayscale' : 
+                  isFighting ? 'border-red-600/30' : 'hover:border-white/20'
+                }`}>
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="flex flex-col min-w-0">
+                      <span className={`heist-font text-xl truncate tracking-widest uppercase ${isEliminated ? 'text-red-600 line-through' : 'text-white'}`}>
+                        {team.name}
+                      </span>
+                      <span className="heist-mono text-[8px] text-gray-600 tracking-widest uppercase">{team.members} OPERATIVES</span>
+                    </div>
+                    <div className={`heist-badge ${
+                      isEliminated ? 'badge-red' : 
+                      isTimeout ? 'badge-red' : 
+                      isFighting ? 'badge-red animate-pulse' : 
+                      'badge-gray'
+                    } text-[7px]`}>
+                      {team.status}
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div className={`heist-font text-4xl leading-none ${isEliminated ? 'text-red-900' : 'text-white'}`}>
+                      {team.tokens} <span className="text-xs text-gray-600">TKN</span>
+                    </div>
+                    {isFighting && <Swords size={16} className="text-red-600" />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </motion.div>
     </motion.div>
   );
 };
 
-// Timeout countdown component
 const TimeoutCountdown = ({ until }) => {
   const [display, setDisplay] = React.useState('');
   React.useEffect(() => {
@@ -279,7 +376,7 @@ const TimeoutCountdown = ({ until }) => {
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
   }, [until]);
-  return <div className="heist-font text-white tracking-widest" style={{ fontSize: '4rem', display: 'inline-block' }}>{display}</div>;
+  return <div className="heist-font text-yellow-500 tracking-widest text-7xl">{display}</div>;
 };
 
 export default ArenaScreen;

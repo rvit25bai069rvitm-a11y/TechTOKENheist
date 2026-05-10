@@ -1,0 +1,394 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&display=swap');
+
+.player-layout-container {
+  --heist-red: #d32f2f;
+  --heist-red-dark: #8b0000;
+  --heist-teal: #4db6ac;
+  --heist-black: #050505;
+  --heist-gray: #121212;
+  --heist-border: rgba(255, 255, 255, 0.05);
+  --heist-glow-red: rgba(211, 47, 47, 0.4);
+  
+  background-color: var(--heist-black);
+  min-height: 100vh;
+  color: white;
+  font-family: 'Share Tech Mono', monospace;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Background Grid */
+.player-layout-container::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: 
+    linear-gradient(var(--heist-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--heist-border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Vignette */
+.player-layout-container::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.8) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Top Bar Styling */
+.player-top-bar {
+  background: rgba(10, 10, 10, 0.95);
+  border-bottom: 1px solid var(--heist-red);
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.top-bar-brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mask-icon-container {
+  width: 40px;
+  height: 40px;
+  background: var(--heist-red);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px var(--heist-glow-red);
+}
+
+.brand-text h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.5rem;
+  letter-spacing: 2px;
+  margin: 0;
+  line-height: 1;
+  color: white;
+}
+
+.brand-text p {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.65rem;
+  color: #888;
+  margin: 0;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.top-bar-stats {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.mission-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.timer-label {
+  font-size: 0.6rem;
+  color: var(--heist-red);
+  letter-spacing: 2px;
+  font-weight: bold;
+}
+
+.timer-value {
+  font-size: 1.5rem;
+  color: var(--heist-red);
+  font-weight: bold;
+  text-shadow: 0 0 10px var(--heist-glow-red);
+}
+
+.abort-btn {
+  background: transparent;
+  border: 1px solid #444;
+  color: #888;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.2rem;
+  padding: 0.4rem 1.5rem;
+  letter-spacing: 1px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.abort-btn:hover {
+  background: var(--heist-red);
+  border-color: var(--heist-red);
+  color: white;
+  box-shadow: 0 0 15px var(--heist-glow-red);
+}
+
+/* Sidebar Styling */
+.player-sidebar {
+  width: 260px;
+  background: var(--heist-black);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  height: calc(100vh - 70px);
+  position: sticky;
+  top: 70px;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem 0;
+  z-index: 50;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 1rem;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #666;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-item.active {
+  background: var(--heist-red);
+  color: white;
+  box-shadow: 0 0 20px rgba(211, 47, 47, 0.2);
+}
+
+.nav-item:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.03);
+  color: #aaa;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.nav-item-icon {
+  flex-shrink: 0;
+}
+
+.nav-item-label {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.4rem;
+  letter-spacing: 1px;
+}
+
+.classified-stamp {
+  margin-top: auto;
+  padding: 2rem;
+  opacity: 0.1;
+  transform: rotate(-15deg);
+  pointer-events: none;
+}
+
+.classified-stamp p {
+  border: 4px solid white;
+  padding: 0.5rem 1rem;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.5rem;
+  color: white;
+  display: inline-block;
+  line-height: 1;
+}
+
+/* Content Area */
+.player-content-wrapper {
+  flex: 1;
+  position: relative;
+  z-index: 10;
+  overflow-y: auto;
+  padding: 2rem;
+}
+
+.player-content-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: 100%;
+}
+
+/* Custom Scrollbar for Player Content */
+.player-content-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.player-content-wrapper::-webkit-scrollbar-track {
+  background: #050505;
+}
+
+.player-content-wrapper::-webkit-scrollbar-thumb {
+  background: #222;
+  border-radius: 3px;
+}
+
+.player-content-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--heist-red);
+}
+
+/* Stats Bottom Bar */
+.player-bottom-bar {
+  height: 40px;
+  background: #0a0a0a;
+  border-top: 1px solid var(--heist-teal);
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  padding: 0 2rem;
+  gap: 3rem;
+  font-size: 0.7rem;
+  color: var(--heist-teal);
+}
+
+.bottom-stat {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.stat-label {
+  opacity: 0.6;
+}
+
+.stat-value {
+  font-weight: bold;
+}
+
+/* Heist Screen Utilities */
+.heist-card {
+  background: rgba(10, 10, 10, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.heist-card-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.heist-card-content {
+  padding: 1.5rem;
+}
+
+.heist-border-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--heist-red), transparent);
+  opacity: 0.5;
+}
+
+.heist-title-main {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 3.5rem;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  margin: 0;
+  color: white;
+  line-height: 0.9;
+}
+
+.heist-title-accent {
+  color: var(--heist-red);
+  text-shadow: 0 0 10px var(--heist-glow-red);
+}
+
+.heist-subtitle-mono {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #666;
+  margin-top: 0.5rem;
+  display: block;
+}
+
+/* Scanline Effect */
+.scanline-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 50%,
+    rgba(0, 0, 0, 0.3) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.1;
+}
+
+/* Status Badges */
+.heist-badge {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.7rem;
+  padding: 0.3rem 0.8rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.badge-red { color: var(--heist-red); border-color: rgba(211, 47, 47, 0.3); background: rgba(211, 47, 47, 0.1); }
+.badge-teal { color: var(--heist-teal); border-color: rgba(77, 182, 172, 0.3); background: rgba(77, 182, 172, 0.1); }
+.badge-gray { color: #666; border-color: rgba(102, 102, 102, 0.3); background: rgba(102, 102, 102, 0.1); }
+
+/* Grid Background Variant */
+.blueprint-grid {
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Animations */
+@keyframes glitch {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+}
+
+.glitch-hover:hover {
+  animation: glitch 0.3s infinite;
+}
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(211, 47, 47, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0); }
+}
+
+.pulse-red {
+  animation: pulse-red 2s infinite;
+}
+

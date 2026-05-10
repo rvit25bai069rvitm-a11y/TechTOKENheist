@@ -121,6 +121,35 @@ const getGameTimer = (gameState) => {
   return '00:00:00'
 }
 
+const enforceWagerEliminations = async () => {
+  const { data: zeroTokenTeams } = await supabase
+    .from('teams')
+    .select('id, name, status, tokens')
+    .lte('tokens', 0)
+    .neq('status', 'eliminated')
+
+  if (!zeroTokenTeams || zeroTokenTeams.length === 0) return []
+
+  const teamIds = zeroTokenTeams.map((team) => team.id)
+  await supabase
+    .from('teams')
+    .update({ status: 'eliminated', timeout_until: null, last_token_update_time: Date.now() })
+    .in('id', teamIds)
+
+  await supabase.from('matchmaking_queue').delete().in('team_id', teamIds)
+
+  try {
+    await supabase.from('notifications').insert(
+      zeroTokenTeams.map((team) => ({
+        message: `${team.name} eliminated in WAGER mode (0 tokens).`,
+        time: new Date().toLocaleTimeString(),
+      }))
+    )
+  } catch (e) { }
+
+  return teamIds
+}
+
 const useGameStateStore = create((set, get) => ({
   ...createInitialClientState(),
   applyServerState: (snapshot) => {
@@ -174,6 +203,7 @@ const useGameStateStore = create((set, get) => ({
   joinQueue: async () => {
     const myTeam = resolveMyTeam(get())
     if (!myTeam) return
+    if (myTeam.status !== 'idle' || myTeam.tokens <= 0 || myTeam.status === 'eliminated') return
     // Prevent duplicate queue entries
     const { data: existing } = await supabase.from('matchmaking_queue').select('id').eq('team_id', myTeam.id).maybeSingle()
     if (existing) return
@@ -182,6 +212,7 @@ const useGameStateStore = create((set, get) => ({
   leaveQueue: async () => {
     const myTeam = resolveMyTeam(get())
     if (!myTeam) return
+    if (myTeam.status === 'eliminated') return
     await supabase.from('matchmaking_queue').delete().eq('team_id', myTeam.id)
   },
   // PRD 4.2: Auto-enroll ALL eligible teams into queue
@@ -211,13 +242,20 @@ const useGameStateStore = create((set, get) => ({
       game_started_at: isResume ? (sys?.game_started_at || Date.now()) : Date.now(),
       paused_at: null
     }).eq('key', 'game')
+
+    if (sys?.phase === 'phase2') {
+      await enforceWagerEliminations()
+    }
+
     // Auto-enroll all eligible teams
     await get().enrollAllEligible()
     get().autoMatchPairs()
   },
   stopGame: async () => {
     await supabase.from('system').update({ is_game_active: false, is_paused: true, paused_at: Date.now(), status: 'paused' }).eq('key', 'game')
-
+    try {
+      await supabase.from('notifications').insert([{ message: `Mission on HOLD by Command.`, time: new Date().toLocaleTimeString() }])
+    } catch (e) { }
   },
   resetGame: async () => {
     // Clear runtime state and credentials, but keep the 24 profile identities in place.
@@ -253,24 +291,36 @@ const useGameStateStore = create((set, get) => ({
     const { data: sys } = await supabase.from('system').select('*').eq('key', 'game').limit(1).maybeSingle()
     const newPhase = sys?.phase === 'phase2' ? 'phase1' : 'phase2'
     await supabase.from('system').update({ phase: newPhase }).eq('key', 'game')
+    try {
+      await supabase.from('notifications').insert([{ message: `System override: INITIATING ${newPhase === 'phase2' ? 'PHASE 02 (WAGER)' : 'PHASE 01 (STANDARD)'}.`, time: new Date().toLocaleTimeString() }])
+    } catch (e) { }
+    if (newPhase === 'phase2') {
+      await enforceWagerEliminations()
+    }
+    get().triggerFetchPublicState?.()
   },
   createTeam: async (teamData) => {
     const teamId = await upsertTeamRecord({ ...teamData, tokens: 1, status: 'idle' })
-    
+
     // PRD 4.2: If game is active, auto-enroll the new team immediately
     const state = get()
     if (teamId && state.gameState.isGameActive && !state.gameState.isPaused) {
       try {
-        await supabase.from('matchmaking_queue').insert([{ 
-          team_id: teamId, 
-          team_name: teamData.name, 
-          team_tokens: 1 
+        await supabase.from('matchmaking_queue').insert([{
+          team_id: teamId,
+          team_name: teamData.name,
+          team_tokens: 1
         }])
+        await supabase.from('notifications').insert([{ message: `${teamData.name} has joined the heist.`, time: new Date().toLocaleTimeString() }])
       } catch (e) {
         console.error('Failed to auto-enroll new team:', e)
       }
+    } else {
+      try {
+        await supabase.from('notifications').insert([{ message: `New crew recruited: ${teamData.name}.`, time: new Date().toLocaleTimeString() }])
+      } catch (e) { }
     }
-    
+
     if (get().triggerFetchPublicState) {
       await get().triggerFetchPublicState()
     }
@@ -315,6 +365,12 @@ const useGameStateStore = create((set, get) => ({
     }
 
     await supabase.from('teams').update(updates).eq('id', teamId);
+    try {
+      await supabase.from('notifications').insert([{ 
+        message: `Admin adjusted tokens for ${team?.name || 'Unknown'}: ${amount > 0 ? '+' : ''}${amount} TKN.`, 
+        time: new Date().toLocaleTimeString() 
+      }])
+    } catch (e) { }
     get().triggerFetchPublicState?.();
   },
   recoverFromTimeout: async (teamId, teamName) => {
@@ -334,6 +390,9 @@ const useGameStateStore = create((set, get) => ({
   createMatch: async (teamAId, teamBId, domain) => {
     const { data: teamA } = await supabase.from('teams').select('id,name,tokens,status').eq('id', teamAId).limit(1).maybeSingle()
     const { data: teamB } = await supabase.from('teams').select('id,name,tokens,status').eq('id', teamBId).limit(1).maybeSingle()
+    if (!teamA || !teamB) return null
+    if (teamA.status === 'eliminated' || teamB.status === 'eliminated') return null
+    if ((teamA.tokens ?? 0) <= 0 || (teamB.tokens ?? 0) <= 0) return null
     const { data: match } = await supabase
       .from('active_matches')
       .insert([
@@ -517,6 +576,8 @@ const useGameStateStore = create((set, get) => ({
 
 const useGameSocketBridge = () => {
   const gameState = useGameStateStore((state) => state.gameState)
+  const socketUser = useGameStateStore((state) => state.user)
+  const socketTeams = useGameStateStore((state) => state.teams)
   const setGameTimer = useGameStateStore((state) => state.setGameTimer)
 
   useEffect(() => {
@@ -694,6 +755,22 @@ const useGameSocketBridge = () => {
 
     return () => clearInterval(recoveryInterval)
   }, [])
+
+  // Safety net: in wager mode, any team at 0 tokens is force-eliminated.
+  useEffect(() => {
+    const shouldEnforce =
+      gameState.isGameActive &&
+      !gameState.isPaused &&
+      gameState.phase === 'phase2' &&
+      socketUser?.role === 'admin' &&
+      (socketTeams || []).some((team) => (team.tokens ?? 0) <= 0 && team.status !== 'eliminated')
+
+    if (!shouldEnforce) return
+
+    enforceWagerEliminations().then(() => {
+      useGameStateStore.getState().triggerFetchPublicState?.()
+    })
+  }, [gameState.isGameActive, gameState.isPaused, gameState.phase, socketUser?.role, socketTeams])
 
   // Session Validation: Automatically logout players if their team is deleted (Reset)
   const { user, teams, logout } = useGameStateStore();

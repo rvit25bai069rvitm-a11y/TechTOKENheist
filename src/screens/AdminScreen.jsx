@@ -45,8 +45,8 @@ const TimeoutDisplay = ({ timeoutUntil }) => {
 
 const AdminScreen = () => {
   const {
-    gameState, teams, matchmakingQueue, activeMatches, matchHistory,
-    queuePairs, matchConstraints,
+    gameState, gameTimer, teams, matchmakingQueue, activeMatches, matchHistory,
+    notifications, queuePairs, matchConstraints,
     startGame, stopGame, resetGame, togglePhase, createTeam, deleteTeam,
     updateTokens, createMatch, declareWinner, spinDomain, updateDomains, setTimeoutDuration,
     enrollAllEligible, autoMatchPairs
@@ -65,6 +65,9 @@ const AdminScreen = () => {
   const [memberInput, setMemberInput] = useState('');
   const [memberNames, setMemberNames] = useState([]);
   const [leader, setLeader] = useState('');
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [logFilter, setLogFilter] = useState('all'); // 'all', 'matches', 'admin'
 
   const [domainInput, setDomainInput] = useState('');
   const [timeoutInput, setTimeoutInput] = useState('');
@@ -135,10 +138,26 @@ const AdminScreen = () => {
 
   const tabs = [
     { id: 'teams', label: 'TEAMS', icon: <Users size={20} /> },
+    { id: 'ranking', label: 'RANKING', icon: <Crown size={20} /> },
     { id: 'queue', label: 'PLANS', icon: <Search size={20} /> },
     { id: 'fighting', label: 'VAULTS', icon: <Flame size={20} /> },
+    { id: 'logs', label: 'LOGS', icon: <ScrollText size={20} /> },
     { id: 'settings', label: 'SCHEMATICS', icon: <Settings size={20} /> },
   ];
+
+  const sortedLeaderboard = useMemo(() => {
+    return [...teams].sort((a, b) => {
+      if (b.tokens !== a.tokens) return b.tokens - a.tokens;
+      return (a.lastTokenUpdateTime || 0) - (b.lastTokenUpdateTime || 0);
+    });
+  }, [teams]);
+
+  const filteredNotifications = useMemo(() => {
+    if (logFilter === 'all') return notifications;
+    if (logFilter === 'matches') return notifications.filter(n => n.message.includes('Match') || n.message.includes('defeated'));
+    if (logFilter === 'admin') return notifications.filter(n => n.message.includes('Admin') || n.message.includes('System') || n.message.includes('Command'));
+    return notifications;
+  }, [notifications, logFilter]);
 
   return (
     <div className="min-h-screen heist-bg p-4 sm:p-6 lg:p-8 text-white relative flex flex-col gap-3 pb-20 overflow-hidden">
@@ -227,6 +246,13 @@ const AdminScreen = () => {
             <div className="heist-mono text-sm text-gray-400 mt-1">
               Queue match: Vault 13A infiltration. Stake: {gameState.phase === 'phase2' ? 'Winner takes all' : '+1/-1 TKN'}. Timeout: {gameState.timeoutDurationOverride ? gameState.timeoutDurationOverride / 60000 : 15} minutes.
             </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 border border-heist-yellow bg-black bg-opacity-70 px-4 py-2 shadow-inner">
+          <Clock className="text-heist-yellow flex-shrink-0" size={22} />
+          <div className="flex flex-col leading-none">
+            <span className="heist-mono text-[10px] uppercase tracking-[0.3em] text-gray-400">Game Timer</span>
+            <span className="heist-font text-3xl tracking-wider text-heist-yellow tabular-nums">{gameTimer}</span>
           </div>
         </div>
         <button
@@ -536,7 +562,84 @@ const AdminScreen = () => {
           </div>
         )}
 
-        {/* SETTINGS TAB (SCHEMATICS) */}
+        {/* RANKING TAB */}
+        {tab === 'ranking' && (
+          <div className="panel-container border-2 border-heist-yellow p-6 h-full flex flex-col bg-blueprint">
+            <h3 className="heist-font text-heist-yellow text-3xl mb-6 tracking-wider">LIVE RANKINGS</h3>
+            <div className="flex-1 overflow-y-auto pr-2 pb-10">
+              <div className="flex flex-col gap-3">
+                {sortedLeaderboard.map((t, idx) => (
+                  <div key={t.id} className="border border-gray-700 bg-black bg-opacity-80 p-4 flex items-center justify-between hover:border-heist-yellow transition-colors">
+                    <div className="flex items-center gap-6">
+                      <span className={`heist-font text-4xl w-12 text-center ${idx < 3 ? 'text-heist-yellow' : 'text-gray-600'}`}>
+                        {String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-700 bg-black flex-shrink-0">
+                        <img src={t.avatarSrc} alt={t.name} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="heist-font text-3xl text-white tracking-widest uppercase">{t.name}</span>
+                        <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">Operator: {t.leader}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="heist-font text-4xl text-heist-yellow tracking-widest">{t.tokens}</span>
+                      <span className="heist-mono text-[10px] text-gray-600 uppercase tracking-widest">TOKENS</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* LOGS TAB */}
+        {tab === 'logs' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+            {/* Intel Feed */}
+            <div className="panel-container border-2 border-heist-teal p-6 flex flex-col bg-blueprint">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="heist-font text-heist-teal text-3xl tracking-wider m-0">INTEL FEED</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => setLogFilter('all')} className={`heist-mono text-[10px] px-2 py-1 border ${logFilter === 'all' ? 'bg-heist-teal text-black border-heist-teal' : 'text-gray-500 border-gray-700'}`}>ALL</button>
+                  <button onClick={() => setLogFilter('matches')} className={`heist-mono text-[10px] px-2 py-1 border ${logFilter === 'matches' ? 'bg-heist-teal text-black border-heist-teal' : 'text-gray-500 border-gray-700'}`}>MATCHES</button>
+                  <button onClick={() => setLogFilter('admin')} className={`heist-mono text-[10px] px-2 py-1 border ${logFilter === 'admin' ? 'bg-heist-teal text-black border-heist-teal' : 'text-gray-500 border-gray-700'}`}>ADMIN</button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-2 custom-scrollbar">
+                {[...filteredNotifications].reverse().map((n, i) => (
+                  <div key={i} className="border-l-2 border-heist-teal bg-black bg-opacity-60 p-3 hover:bg-opacity-80 transition-all">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="heist-mono text-[10px] text-gray-500 uppercase">{n.time}</span>
+                    </div>
+                    <p className="heist-mono text-xs text-gray-300 leading-relaxed m-0 uppercase tracking-widest">{n.message}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Telemetry Logs */}
+            <div className="panel-container border-2 border-heist-red p-6 flex flex-col bg-blueprint">
+              <h3 className="heist-font text-heist-red text-3xl mb-6 tracking-wider">TELEMETRY LOGS</h3>
+              <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-2 custom-scrollbar">
+                {[...matchHistory].reverse().map((h, i) => (
+                  <div key={h.id || i} className="border-l-2 border-heist-red bg-black bg-opacity-60 p-3 hover:bg-opacity-80 transition-all">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="heist-mono text-[10px] text-red-500 uppercase font-bold tracking-widest">{h.domain}</span>
+                      <span className="heist-mono text-[10px] text-gray-500 uppercase">{h.timestamp}</span>
+                    </div>
+                    <div className="heist-mono text-xs tracking-widest uppercase flex items-center gap-2">
+                      <span className="text-white">{h.winner}</span>
+                      <span className="text-heist-red">// NEUTRALIZED //</span>
+                      <span className="text-gray-400">{h.loser}</span>
+                    </div>
+                    {h.isWager && <div className="mt-2 heist-mono text-[8px] text-heist-teal border border-heist-teal w-fit px-1">WAGER MATCH</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         {tab === 'settings' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
             <div className="panel-container border-2 border-[#444] p-6 relative overflow-hidden">
