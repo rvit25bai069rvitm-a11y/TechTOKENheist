@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useGameState } from '../hooks/useGameState';
-import { Swords, Crosshair, Ban, Lock, Zap, Search, Timer, ShieldAlert, AlertCircle } from 'lucide-react';
+import { Swords, Crosshair, Ban, Lock, Zap, Search, Timer, ShieldAlert, AlertCircle, Users } from 'lucide-react';
 import { buildQueueDiagnostics } from '../utils/matchmaking';
 
 const ArenaScreen = () => {

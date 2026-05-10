@@ -18,7 +18,7 @@ const LoginScreen = () => {
     setLoading(true);
 
     try {
-      const result = await login(username, password);
+      const result = await login(username.trim(), password);
       if (result.success) {
         if (result.role === 'admin') {
           navigate('/admin');
@@ -99,7 +99,7 @@ const LoginScreen = () => {
                     id="username"
                     type="text"
                     className="w-full bg-[#1a0a09] border border-white/5 text-white heist-mono text-sm py-4 px-5 focus:outline-none focus:border-yellow-500 transition-all placeholder:text-gray-800"
-                    placeholder="e.g. TOKYO_99"
+                    placeholder="e.g. TOKYO"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required

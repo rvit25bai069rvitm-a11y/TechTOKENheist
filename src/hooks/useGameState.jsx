@@ -150,7 +150,11 @@ const enforceWagerEliminations = async () => {
   return teamIds
 }
 
-const useGameStateStore = create((set, get) => ({
+import { persist } from 'zustand/middleware'
+
+const useGameStateStore = create(
+  persist(
+    (set, get) => ({
   ...createInitialClientState(),
   applyServerState: (snapshot) => {
     set((current) => ({
@@ -571,8 +575,14 @@ const useGameStateStore = create((set, get) => ({
       await Promise.all(updatePromises)
       get().triggerFetchPublicState?.()
     }
-  },
-}))
+    },
+  }),
+  {
+    name: 'heist-auth-storage',
+    partialize: (state) => ({ user: state.user }),
+  }
+)
+)
 
 const useGameSocketBridge = () => {
   const gameState = useGameStateStore((state) => state.gameState)
@@ -756,6 +766,20 @@ const useGameSocketBridge = () => {
     return () => clearInterval(recoveryInterval)
   }, [])
 
+  // Real-time matchmaking engine (Admin only)
+  useEffect(() => {
+    if (socketUser?.role !== 'admin') return
+
+    const matchmakingInterval = setInterval(() => {
+      const state = useGameStateStore.getState()
+      if (state.gameState.isGameActive && !state.gameState.isPaused) {
+        state.autoMatchPairs()
+      }
+    }, 3000) // Run matchmaking every 3 seconds
+
+    return () => clearInterval(matchmakingInterval)
+  }, [socketUser?.role])
+
   // Safety net: in wager mode, any team at 0 tokens is force-eliminated.
   useEffect(() => {
     const shouldEnforce =
@@ -777,15 +801,13 @@ const useGameSocketBridge = () => {
   useEffect(() => {
     if (user?.role === 'player') {
       const teamExists = teams.some(t => t.id === user.teamId);
-      // Only logout if teams have actually been loaded (teams.length > 0 or explicit reset status)
+      // Only logout if teams have been loaded AND the player's team is definitively missing.
+      // We skip the logout if teams.length is 0 to avoid kicking people out during initial fetch.
       if (teams.length > 0 && !teamExists) {
-        logout();
-      } else if (teams.length === 0 && gameState.status === 'not_started' && gameState.isGameActive === false) {
-        // Explicitly check for reset state where teams are cleared
         logout();
       }
     }
-  }, [user, teams, gameState.status, gameState.isGameActive, logout]);
+  }, [user, teams, logout]);
 }
 
 export const GameStateProvider = ({ children }) => {
@@ -822,7 +844,7 @@ export const useGameState = () => {
 
   const myQueueEntry = useMemo(() => {
     if (!myTeam) return null
-    return (state.matchmakingQueue || []).find((queueEntry) => (queueEntry.teamId || queueEntry.team_id) === myTeam.id) || null
+    return myTeam ? (state.matchmakingQueue || []).find((queueEntry) => (queueEntry.teamId || queueEntry.team_id) === myTeam.id) : null
   }, [state.matchmakingQueue, myTeam])
 
   const queuePairs = useMemo(() => {

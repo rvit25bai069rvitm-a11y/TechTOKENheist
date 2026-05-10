@@ -392,3 +392,10 @@
   animation: pulse-red 2s infinite;
 }
 
+.heist-font {
+  font-family: 'Bebas Neue', sans-serif;
+}
+
+.heist-mono {
+  font-family: 'Share Tech Mono', monospace;
+}
