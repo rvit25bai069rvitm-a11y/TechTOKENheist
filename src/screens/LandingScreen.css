@@ -136,14 +136,21 @@ html.landing-scroll-mode {
   width: 100vw;
   height: 100vh;
   height: 100svh;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
   background-color: #070909;
   transform-origin: center center;
   will-change: transform;
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
+}
+
+.vault-bg-inner {
+  position: absolute;
+  inset: -15%; /* Margin for zoom overflow */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  will-change: transform;
 }
 
 .vault-fog {

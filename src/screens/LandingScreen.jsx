@@ -7,7 +7,7 @@ import tokyolImg from '../../assets/icons/tokyol.png';
 import riolImg from '../../assets/icons/riol.png';
 import berlinlImg from '../../assets/icons/berlinl.png';
 import songMp3 from '../assets/song.mp3';
-import { motion } from 'framer-motion';
+import { motion, useScroll, useSpring, useTransform } from 'framer-motion';
 import gdgLogo from '../../assets/gdg.png';
 
 const TOKEN_BURST = [
@@ -198,8 +198,23 @@ const LandingScreen = () => {
   const rainDriftX = ((safeMouseX / viewportWidth) - 0.5) * 220;
   const rainDriftY = ((safeMouseY / vh) - 0.5) * 90;
   const rainSpeed = started ? Math.max(0.35, 1 - (scrollY / (vh * 5)) * 0.65) : 1;
-  const mobileVaultScale = 1 + Math.min(0.045, Math.max(0, (scrollY - vh * 0.45) / (vh * 7.5)) * 0.045);
-  const vaultScale = isMobileViewport ? mobileVaultScale : 1;
+  
+  // Cinematic Smooth Scroll Logic
+  const { scrollY: rawScrollY } = useScroll();
+  const smoothScrollY = useSpring(rawScrollY, {
+    damping: 35,
+    stiffness: 70,
+    mass: 1.2
+  });
+
+  const zoomThreshold = vh * 1.8;
+  
+  // Decoupled motion value for the zoom scale
+  const vaultScale = useTransform(smoothScrollY, 
+    [0, zoomThreshold, zoomThreshold + vh * 8], 
+    [0.85, 1.0, 1.5]
+  );
+
   const tokyoRevealRadius = isMobileViewport ? 260 : 360;
   const tokyoLightRadius = isMobileViewport ? 300 : 390;
   const tokyoRevealMask = `radial-gradient(${tokyoRevealRadius}px circle at ${safeMouseX}px ${safeMouseY}px, black 0%, rgba(0, 0, 0, 0.82) 24%, rgba(0, 0, 0, 0.36) 54%, transparent 100%)`;
@@ -232,16 +247,25 @@ const LandingScreen = () => {
       )}
 
       {/* FIXED VAULT BACKGROUND (rvitm.png) */}
-      <div
+      <motion.div
         className="vault-bg"
         style={{
-          backgroundImage: `url(${rvitmImg})`,
           opacity: bgOpacity,
-          transform: `scale(${vaultScale})`,
           filter: phase2Active ? 'brightness(0.6) sepia(1) hue-rotate(320deg) saturate(3)' : 'brightness(0.5)',
-          transition: 'filter 1s ease-out, transform 1.6s ease-out'
         }}
-      />
+        transition={{
+          filter: { duration: 1.5, ease: "easeOut" },
+          opacity: { duration: 0.8, ease: "easeOut" }
+        }}
+      >
+        <motion.div 
+          className="vault-bg-inner" 
+          style={{ 
+            backgroundImage: `url(${rvitmImg})`,
+            scale: vaultScale
+          }} 
+        />
+      </motion.div>
 
       {/* Environmental Effects Overlays */}
       <div className="vault-fog" style={{ opacity: bgOpacity * 0.6 }} />
@@ -499,15 +523,38 @@ const LandingScreen = () => {
                   src={berlinlImg}
                   alt="Berlin"
                   className="berlin-image"
-                  initial={{ scale: 1.2, filter: 'brightness(0.2)' }}
-                  whileInView={{ scale: 1, filter: 'brightness(1)' }}
+                  initial={{ scale: 0.8, filter: 'brightness(0) blur(10px)', y: 50, opacity: 0 }}
+                  whileInView={{
+                    scale: 1,
+                    filter: 'brightness(1) blur(0px)',
+                    y: 0,
+                    opacity: 1
+                  }}
+                  animate={{
+                    y: [0, -12, 0],
+                    rotate: [0, 1, 0, -1, 0],
+                    scale: [1, 1.03, 1]
+                  }}
                   viewport={finaleMotion.viewport}
-                  transition={{ duration: 1.8, ease: "easeOut" }}
+                  transition={{
+                    duration: 1.8,
+                    ease: "easeOut",
+                    y: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                    rotate: { duration: 6, repeat: Infinity, ease: "easeInOut" },
+                    scale: { duration: 5, repeat: Infinity, ease: "easeInOut" }
+                  }}
                 />
               </div>
               <div className="berlin-typography">
                 <motion.h1 className="berlin-title"
-                  initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={finaleMotion.viewport} transition={{ duration: 0.85 }}
+                  initial={{ opacity: 0, y: 40, skewY: 10 }}
+                  whileInView={{ opacity: 1, y: 0, skewY: 0 }}
+                  animate={{ textShadow: ["0 0 20px rgba(255,255,255,0.2)", "0 0 40px rgba(255,255,255,0.6)", "0 0 20px rgba(255,255,255,0.2)"] }}
+                  viewport={finaleMotion.viewport}
+                  transition={{
+                    duration: 0.85,
+                    textShadow: { duration: 3, repeat: Infinity, ease: "easeInOut" }
+                  }}
                 >WE WELCOME YOU!</motion.h1>
                 <motion.h2 className="berlin-subtitle"
                   initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={finaleMotion.viewport} transition={{ duration: 0.75, delay: 0.18 }}
