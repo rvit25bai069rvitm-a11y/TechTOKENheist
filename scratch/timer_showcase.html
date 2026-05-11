@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cinematic Match Start - Showcase</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050505;
+            --accent-color: #ffffff;
+            --void-glow: rgba(147, 51, 234, 0.4);
+            --text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: white;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #background-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('../assets/void_bg.png');
+            background-size: cover;
+            background-position: center;
+            filter: brightness(0.4) contrast(1.2);
+            z-index: -1;
+            transition: transform 10s linear, filter 1s ease;
+        }
+
+        .zoomed {
+            transform: scale(1.1);
+            filter: brightness(0.6) contrast(1.4);
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.8) 100%);
+            pointer-events: none;
+        }
+
+        #timer-container {
+            text-align: center;
+            z-index: 10;
+        }
+
+        #timer {
+            font-size: 12rem;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.05em;
+            margin: 0;
+            text-shadow: var(--text-shadow);
+            opacity: 0.8;
+            transition: all 0.3s ease;
+        }
+
+        .pulse-timer {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+
+            50% {
+                transform: scale(1.05);
+                opacity: 1;
+                text-shadow: 0 0 40px rgba(255, 255, 255, 0.8);
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+        }
+
+        #subtitles {
+            width: 100%;
+            text-align: center;
+            font-family: 'Cinzel', serif;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #announcement {
+            text-align: center;
+            font-size: 1.5rem;
+            letter-spacing: 0.5em;
+            text-transform: uppercase;
+            opacity: 0;
+            transition: opacity 1s ease;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 3rem;
+        }
+
+        #content-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 15;
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+
+        #tear-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            display: flex;
+            z-index: 5;
+        }
+
+        .tear-part {
+            position: absolute;
+            top: 0;
+            width: 50%;
+            height: 100%;
+            background-size: 200% 100%;
+            opacity: 0;
+            transition: transform 1.2s cubic-bezier(0.7, 0, 0.3, 1);
+            z-index: 50;
+        }
+
+        #tear-left {
+            left: 0;
+            background-position: left center;
+            border-right: 2px solid white;
+        }
+
+        #tear-right {
+            right: 0;
+            background-position: right center;
+            border-left: 2px solid white;
+        }
+
+        .tear-animate-left {
+            transform: translateX(-100%) skewX(-10deg);
+        }
+
+        .tear-animate-right {
+            transform: translateX(100%) skewX(10deg);
+        }
+
+        #game-reveal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 2s ease;
+        }
+
+        .reveal-content h1 {
+            font-size: 5rem;
+            letter-spacing: 0.3em;
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            animation: glitch 1s infinite;
+        }
+
+        #timer-container {
+            margin-bottom: 2rem;
+        }
+
+        #subtitles {
+            width: 100%;
+            text-align: center;
+            font-family: 'Cinzel', serif;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #sub-content {
+            transition: all 0.5s ease-in-out;
+        }
+
+        #subtitles.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .sub-main {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to bottom, #fff, #ccc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+
+        .sub-translation {
+            font-size: 1.2rem;
+            font-weight: 400;
+            font-style: italic;
+            opacity: 0.7;
+            letter-spacing: 0.05em;
+        }
+
+        #start-button {
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        #start-button:hover {
+            background: white;
+            color: black;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .flash-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            opacity: 0;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .flash-animation {
+            animation: flash 0.8s ease-out;
+        }
+
+        @keyframes flash {
+            0% {
+                opacity: 0.8;
+            }
+
+            100% {
+                opacity: 0;
+            }
+        }
+
+        /* Glitch effect for timer at 5s */
+        .glitch {
+            animation: glitch 0.3s cubic-bezier(.25, .46, .45, .94) both infinite;
+        }
+
+        @keyframes glitch {
+            0% {
+                transform: translate(0);
+            }
+
+            20% {
+                transform: translate(-3px, 3px);
+            }
+
+            40% {
+                transform: translate(-3px, -3px);
+            }
+
+            60% {
+                transform: translate(3px, 3px);
+            }
+
+            80% {
+                transform: translate(3px, -3px);
+            }
+
+            100% {
+                transform: translate(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="background-container"></div>
+    <div id="overlay"></div>
+    <div class="flash-screen" id="flash"></div>
+
+    <button id="start-button">Initialize Match</button>
+
+    <div id="tear-wrapper">
+        <div id="tear-left" class="tear-part"></div>
+        <div id="tear-right" class="tear-part"></div>
+
+        <div id="content-container">
+            <div id="announcement">GAME STARTING IN 10</div>
+
+            <div id="timer-container" class="hidden">
+                <h1 id="timer">10</h1>
+            </div>
+
+            <div id="subtitles" class="hidden">
+                <div id="sub-content">
+                    <!-- Content will be injected by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-reveal" class="hidden">
+        <div class="reveal-content">
+            <h1>MATCH LIVE</h1>
+            <p>Heist in progress...</p>
+        </div>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('start-button');
+        const timerContainer = document.getElementById('timer-container');
+        const timerEl = document.getElementById('timer');
+        const subtitleEl = document.getElementById('subtitles');
+        const subContent = document.getElementById('sub-content');
+        const bgContainer = document.getElementById('background-container');
+        const flashEl = document.getElementById('flash');
+        const announceEl = document.getElementById('announcement');
+        const tearWrapper = document.getElementById('tear-wrapper');
+        const tearLeft = document.getElementById('tear-left');
+        const tearRight = document.getElementById('tear-right');
+        const gameReveal = document.getElementById('game-reveal');
+
+        const audio = new Audio('../assets/anant.mp3');
+
+        function startSequence() {
+            startBtn.classList.add('hidden');
+            timerContainer.classList.remove('hidden');
+            announceEl.style.opacity = "1";
+            bgContainer.classList.add('zoomed');
+
+            let timeLeft = 10;
+            timerEl.innerText = timeLeft;
+
+            const startTime = Date.now();
+
+            const interval = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const currentSeconds = Math.max(0, 10 - (elapsed / 1000));
+
+                timerEl.innerText = Math.ceil(currentSeconds);
+
+                if (currentSeconds <= 0) {
+                    clearInterval(interval);
+                    timerEl.innerText = "0";
+                    triggerTear();
+                    return;
+                }
+
+                if (currentSeconds > 6) {
+                    announceEl.innerText = `GAME STARTING IN ${Math.ceil(currentSeconds)}`;
+                } else {
+                    announceEl.style.opacity = "0";
+                }
+
+                if (currentSeconds <= 6) {
+                    timerEl.classList.add('pulse-timer');
+                }
+            }, 100);
+
+            setTimeout(() => {
+                audio.play().catch(e => console.error("Audio failed:", e));
+                flashEl.classList.add('flash-animation');
+                setTimeout(() => flashEl.classList.remove('flash-animation'), 800);
+            }, 4000);
+
+            setTimeout(() => {
+                timerEl.classList.add('glitch');
+                subtitleEl.classList.remove('hidden');
+                subtitleEl.style.opacity = "1";
+                subtitleEl.style.transform = "translateY(0)";
+
+                subContent.innerHTML = `
+                    <div class="sub-main" style="color: #ffffff; text-shadow: 0 0 20px rgba(255,255,255,0.6);">क्षेत्र विस्तार</div>
+                    <div class="sub-main" style="font-size: 2rem; color: #ffffff;">KSHETRA VISTĀRAM</div>
+                    <div class="sub-translation" style="font-size: 1.5rem; color: #cccccc;">DOMAIN EXPANSION</div>
+                `;
+            }, 7000);
+
+            setTimeout(() => {
+                subContent.style.opacity = "0";
+                subContent.style.transform = "scale(0.95)";
+
+                setTimeout(() => {
+                    subContent.style.opacity = "1";
+                    subContent.style.transform = "scale(1.1)";
+
+                    subContent.innerHTML = `
+                        <div class="sub-main" style="color: #bc6ff1; text-shadow: 0 0 30px #892cdc;"> अनन्त शून्यता</div>
+                        <div class="sub-main" style="font-size: 2.2rem; color: #bc6ff1; text-shadow: 0 0 20px #892cdc;">ANANTA ŚŪNYATĀ</div>
+                        <div class="sub-translation" style="font-size: 1.6rem; color: #d9bbf9; font-weight: bold;">INFINITE VOID</div>
+                    `;
+
+                    bgContainer.style.filter = "hue-rotate(280deg) brightness(0.7) contrast(1.5)";
+                    timerEl.style.color = "#bc6ff1";
+                    timerEl.style.textShadow = "0 0 30px #892cdc";
+                }, 300);
+            }, 8500);
+        }
+
+        function triggerTear() {
+            tearLeft.style.backgroundImage = getComputedStyle(bgContainer).backgroundImage;
+            tearRight.style.backgroundImage = getComputedStyle(bgContainer).backgroundImage;
+
+            timerContainer.style.opacity = "0";
+            subtitleEl.style.opacity = "0";
+            bgContainer.style.opacity = "0";
+
+            tearLeft.style.opacity = "1";
+            tearRight.style.opacity = "1";
+
+            setTimeout(() => {
+                tearLeft.classList.add('tear-animate-left');
+                tearRight.classList.add('tear-animate-right');
+
+                gameReveal.classList.remove('hidden');
+                setTimeout(() => gameReveal.style.opacity = "1", 100);
+            }, 50);
+        }
+
+        startBtn.addEventListener('click', startSequence);
+    </script>
+</body>
+
+</html>

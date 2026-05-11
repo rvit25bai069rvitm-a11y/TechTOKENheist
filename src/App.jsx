@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } f
 import { GameStateProvider, useGameState } from './hooks/useGameState';
 import { LayoutDashboard, Swords, Crosshair, Book, Eye, Zap, VenetianMask, Users } from 'lucide-react';
 import CountdownOverlay from './components/CountdownOverlay';
+import MatchStartOverlay from './components/MatchStartOverlay';
 import gdgLogo from '../assets/gdg.png';
 
 import './PlayerLayout.css';
@@ -127,11 +128,11 @@ const AdminLayout = ({ children }) => {
         </div>
 
         <div className="flex items-center gap-8">
-           <div className={`px-4 py-2 heist-mono text-sm tracking-widest flex items-center gap-2 ${gameState.phase === 'phase2' ? 'bg-heist-red text-white' : 'border border-heist-teal text-heist-teal'}`}>
+          <div className={`px-4 py-2 heist-mono text-sm tracking-widest flex items-center gap-2 ${gameState.phase === 'phase2' ? 'bg-heist-red text-white' : 'border border-heist-teal text-heist-teal'}`}>
             <Zap size={14} />
             {gameState.phase === 'phase2' ? 'PHASE 2 — WAGER' : 'PHASE 1 — STANDARD'}
           </div>
-          
+
           <div className="mission-timer">
             <span className="timer-label">MISSION TIMER</span>
             <span className="timer-value tabular-nums">{gameTimer}</span>
@@ -194,6 +195,7 @@ const AppContent = () => {
   return (
     <>
       <CountdownOverlay count={countdown} />
+      {user?.role !== 'admin' && <MatchStartOverlay />}
       <Suspense fallback={<div className="route-loading" />}>
         <Routes>
           {/* Public */}
