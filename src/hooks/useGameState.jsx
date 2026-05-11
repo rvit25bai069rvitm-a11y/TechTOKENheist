@@ -311,7 +311,12 @@ const useGameStateStore = create(
           // Phase notification is best-effort.
         }
         if (newPhase === 'phase2') {
+          // WAGER MODE CLEAN SLATE: Clear Phase 1 match history so constraints start fresh
+          // Only tokens carry over — no opponent/domain history from Phase 1
+          await supabase.from('match_history').delete().neq('id', '00000000-0000-0000-0000-000000000000')
           await enforceWagerEliminations()
+          // Re-enroll all eligible teams for fresh wager matchmaking
+          await get().enrollAllEligible()
         }
         get().triggerFetchPublicState?.()
       },
@@ -413,6 +418,15 @@ const useGameStateStore = create(
         if (!teamA || !teamB) return null
         if (teamA.status === 'eliminated' || teamB.status === 'eliminated') return null
         if ((teamA.tokens ?? 0) <= 0 || (teamB.tokens ?? 0) <= 0) return null
+
+        // MATCH LOCKING: Prevent double-booking — check if either team is already in an active match
+        const { data: existingA } = await supabase.from('active_matches').select('id').or(`team_a.eq.${teamAId},team_b.eq.${teamAId}`).limit(1).maybeSingle()
+        const { data: existingB } = await supabase.from('active_matches').select('id').or(`team_a.eq.${teamBId},team_b.eq.${teamBId}`).limit(1).maybeSingle()
+        if (existingA || existingB) {
+          console.warn('Match lock violation: one of the teams is already in an active match')
+          return null
+        }
+
         const { data: match } = await supabase
           .from('active_matches')
           .insert([
@@ -457,17 +471,18 @@ const useGameStateStore = create(
         const lTk = loserTeam.tokens ?? 1
 
         if (isWager) {
-          // PRD 4.6 Wager Mode token transfer
+          // Wager Mode token transfer (corrected formula)
           if (wTk >= lTk) {
             // Higher-token (or equal) team wins → takes ALL loser tokens → loser eliminated
             winnerTokens = wTk + lTk
             loserTokens = 0
             loserStatus = 'eliminated'
           } else {
-            // Lower-token team wins → gets floor((A+B)/2) tokens total
-            const total = wTk + lTk
-            winnerTokens = Math.floor(total / 2)
-            loserTokens = total - winnerTokens
+            // Underdog wins: transfer floor(mean) tokens from loser (higher) to winner (lower)
+            // Example: A=15, B=5, B wins → mean=floor(20/2)=10 → A=15-10=5, B=5+10=15
+            const mean = Math.floor((wTk + lTk) / 2)
+            winnerTokens = wTk + mean   // underdog gains mean
+            loserTokens = lTk - mean    // favorite loses mean
             loserStatus = loserTokens <= 0 ? 'eliminated' : 'idle'
           }
         } else {
@@ -535,6 +550,22 @@ const useGameStateStore = create(
             .insert([{ id: `mh_${matchId}`, winner: winnerTeam.name, loser: loserTeam.name, domain: match.domain, timestamp: new Date().toLocaleTimeString() }])
         }
         await supabase.from('active_matches').delete().eq('id', matchId)
+
+        // AUTO RE-ENQUEUE: After match ends, auto re-queue both teams if eligible
+        const { data: sysCheck } = await supabase.from('system').select('*').eq('key', 'game').limit(1).maybeSingle()
+        if (sysCheck?.is_game_active && !sysCheck?.is_paused) {
+          const reEnqueue = async (teamId, teamName, status, tokens) => {
+            if (status === 'eliminated' || status === 'timeout' || tokens <= 0) return
+            const { data: alreadyInQueue } = await supabase.from('matchmaking_queue').select('id').eq('team_id', teamId).maybeSingle()
+            if (!alreadyInQueue) {
+              await supabase.from('matchmaking_queue').insert([{ team_id: teamId, team_name: teamName, team_tokens: tokens }])
+            }
+          }
+          await reEnqueue(winnerId, winnerTeam.name, 'idle', winnerTokens)
+          await reEnqueue(loserId, loserTeam.name, loserStatus, loserTokens)
+        }
+
+        get().triggerFetchPublicState?.()
       },
       spinDomain: async (matchId, preferredDomain) => {
         // PRD 4.3: Domain assignment with constraint validation
@@ -578,7 +609,20 @@ const useGameStateStore = create(
         const waitingQueueIds = state.matchmakingQueue.filter(q => !q.matchedWith).map(q => q.teamId)
         if (waitingQueueIds.length < 2) return
 
-        const waitingTeams = state.teams.filter(t => waitingQueueIds.includes(t.id))
+        // CONCURRENCY GUARD: Get all team IDs currently in active matches
+        const teamsInActiveMatches = new Set()
+        ;(state.activeMatches || []).forEach(m => {
+          const aId = m.team_a || m.teamA?.id
+          const bId = m.team_b || m.teamB?.id
+          if (aId) teamsInActiveMatches.add(aId)
+          if (bId) teamsInActiveMatches.add(bId)
+        })
+
+        // Only consider teams NOT already fighting
+        const eligibleIds = waitingQueueIds.filter(id => !teamsInActiveMatches.has(id))
+        if (eligibleIds.length < 2) return
+
+        const waitingTeams = state.teams.filter(t => eligibleIds.includes(t.id))
 
         // Run matchmaking engine
         const pairs = runMatchmaking({
@@ -804,6 +848,39 @@ const useGameSocketBridge = () => {
     }, 3000) // Run matchmaking every 3 seconds
 
     return () => clearInterval(matchmakingInterval)
+  }, [socketUser?.role])
+
+  // AUTO-QUEUE: Players are auto-enrolled globally (no need to open Arena)
+  useEffect(() => {
+    if (socketUser?.role !== 'player') return
+
+    const autoEnrollInterval = setInterval(async () => {
+      const state = useGameStateStore.getState()
+      if (!state.gameState.isGameActive || state.gameState.isPaused) return
+
+      const myTeam = resolveMyTeam(state)
+      if (!myTeam) return
+      if (myTeam.status !== 'idle') return
+      if (myTeam.tokens <= 0 || myTeam.status === 'eliminated') return
+
+      // Check if already in queue
+      const alreadyInQueue = (state.matchmakingQueue || []).some(
+        (q) => (q.teamId || q.team_id) === myTeam.id
+      )
+      if (alreadyInQueue) return
+
+      // Check if already in an active match
+      const inMatch = (state.activeMatches || []).some((m) => {
+        const aId = m.team_a || m.teamA?.id
+        const bId = m.team_b || m.teamB?.id
+        return aId === myTeam.id || bId === myTeam.id
+      })
+      if (inMatch) return
+
+      await state.joinQueue()
+    }, 2000) // Check every 2 seconds
+
+    return () => clearInterval(autoEnrollInterval)
   }, [socketUser?.role])
 
   // Safety net: in wager mode, any team at 0 tokens is force-eliminated.

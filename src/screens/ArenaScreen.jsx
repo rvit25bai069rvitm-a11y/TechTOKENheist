@@ -10,31 +10,10 @@ const ArenaScreen = () => {
   const amITimeout = myTeam && myTeam.status === 'timeout';
   const isPaused = gameState.isPaused;
   const isPhase2 = gameState.phase === 'phase2';
-  const autoJoinRequestedRef = React.useRef(false);
+  // Auto-join is now handled globally in useGameSocketBridge — no manual action needed from players
 
-  const shouldAutoJoinQueue = Boolean(
-    myTeam &&
-    gameState.isGameActive &&
-    !isPaused &&
-    !amIEliminated &&
-    !amITimeout &&
-    myTeam.status === 'idle' &&
-    !isInQueue
-  );
 
-  React.useEffect(() => {
-    if (!gameState.isGameActive && !gameState.isPaused) return;
 
-    if (shouldAutoJoinQueue && !autoJoinRequestedRef.current) {
-      autoJoinRequestedRef.current = true;
-      joinQueue();
-      return;
-    }
-
-    if (!shouldAutoJoinQueue || isInQueue) {
-      autoJoinRequestedRef.current = false;
-    }
-  }, [gameState.isGameActive, gameState.isPaused, shouldAutoJoinQueue, isInQueue, joinQueue]);
 
   const waitingQueue = React.useMemo(
     () => (matchmakingQueue || []).filter((q) => !(q.matchedWith || q.matched_with)),

@@ -77,27 +77,35 @@ const LobbyScreen = () => {
           <div className="flex flex-col p-4 gap-3 max-h-[600px] overflow-y-auto custom-scrollbar">
             {sortedLeaderboard.map((team, idx) => {
               const isMe = myTeam?.id === team.id;
+              const isEliminated = team.status === 'eliminated';
               return (
-                <div key={team.id} className={`relative flex items-center justify-between p-4 transition-all group ${isMe ? 'bg-red-600/20 border border-red-600' : 'bg-white/2 border border-white/5 hover:border-red-600/30'}`}>
+                <div key={team.id} className={`relative flex items-center justify-between p-4 transition-all group ${isEliminated ? 'opacity-50 grayscale' : ''} ${isMe ? 'bg-red-600/20 border border-red-600' : 'bg-white/2 border border-white/5 hover:border-red-600/30'}`}>
                   {isMe && <div className="absolute left-0 top-0 h-full w-1 bg-red-600 shadow-[0_0_15px_rgba(211,47,47,0.8)]"></div>}
                   <div className="flex items-center gap-5 min-w-0">
-                    <span className={`heist-font text-4xl w-10 text-center ${idx === 0 ? 'text-red-500' : idx === 1 ? 'text-white' : 'text-gray-700'} ${isMe ? 'text-white' : ''}`}>
+                    <span className={`heist-font text-4xl w-10 text-center ${isEliminated ? 'text-gray-800' : idx === 0 ? 'text-red-500' : idx === 1 ? 'text-white' : 'text-gray-700'} ${isMe ? 'text-white' : ''}`}>
                       {String(idx + 1).padStart(2, '0')}
                     </span>
                     <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 shrink-0">
                       <img src={team.avatarSrc} alt={team.name} className="w-full h-full object-cover" />
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="heist-font text-2xl tracking-widest truncate text-white uppercase group-hover:text-red-500 transition-colors">
+                      <span className={`heist-font text-2xl tracking-widest truncate uppercase group-hover:text-red-500 transition-colors ${isEliminated ? 'text-red-600 line-through' : 'text-white'}`}>
                         {team.name}
                       </span>
-                      <span className="heist-mono text-[9px] uppercase tracking-[0.2em] mt-1 text-gray-500">
-                        OP: {team.leader}
-                      </span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="heist-mono text-[9px] uppercase tracking-[0.2em] text-gray-500">
+                          OP: {team.leader}
+                        </span>
+                        {isEliminated && (
+                          <span className="heist-mono text-[8px] uppercase tracking-widest text-red-500 border border-red-600/30 px-1.5 py-0.5 bg-red-950/30">
+                            ELIMINATED
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex flex-col items-end shrink-0">
-                    <span className={`heist-font text-3xl tracking-widest leading-none ${isMe ? 'text-white' : 'text-red-600'}`}>{team.tokens}</span>
+                    <span className={`heist-font text-3xl tracking-widest leading-none ${isEliminated ? 'text-red-900' : isMe ? 'text-white' : 'text-red-600'}`}>{team.tokens}</span>
                     <span className="heist-mono text-[8px] uppercase tracking-widest text-gray-600">TOKENS</span>
                   </div>
                 </div>

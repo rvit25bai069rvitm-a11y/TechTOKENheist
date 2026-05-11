@@ -284,14 +284,17 @@ export function calculateWagerOutcome(winnerTeam, loserTeam) {
       loserStatus: 'eliminated',
     }
   } else {
-    // Lower-token team wins → gets ⌊(A + B) / 2⌋ total
-    const total = wTokens + lTokens
-    const winnerGets = Math.floor(total / 2)
-    const loserKeeps = total - winnerGets
+    // Underdog (lower-token team) wins:
+    // mean = floor((higherTokens + lowerTokens) / 2)
+    // Higher team loses mean tokens, lower team gains mean tokens
+    // Example: A=15, B=5 → mean=10 → A=15-10=5, B=5+10=15
+    const mean = Math.floor((wTokens + lTokens) / 2)
+    const winnerTokens = wTokens + mean   // underdog gains mean
+    const loserTokens = lTokens - mean    // favorite loses mean
     return {
-      winnerTokens: winnerGets,
-      loserTokens: loserKeeps,
-      loserStatus: loserKeeps <= 0 ? 'eliminated' : 'idle',
+      winnerTokens,
+      loserTokens: Math.max(0, loserTokens),
+      loserStatus: loserTokens <= 0 ? 'eliminated' : 'idle',
     }
   }
 }

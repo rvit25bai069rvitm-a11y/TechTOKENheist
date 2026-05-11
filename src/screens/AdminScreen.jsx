@@ -52,11 +52,9 @@ const AdminScreen = () => {
     enrollAllEligible, autoMatchPairs
   } = useGameState();
 
-  useEffect(() => {
-    if (gameState.isGameActive && !gameState.isPaused) {
-      autoMatchPairs();
-    }
-  }, [matchmakingQueue, teams, gameState.isGameActive, gameState.isPaused, autoMatchPairs]);
+  // Matchmaking is now handled globally by useGameSocketBridge (3s interval)
+  // No need to trigger autoMatchPairs from AdminScreen anymore
+
 
   const [tab, setTab] = useState('teams');
   const [selectedProfile, setSelectedProfile] = useState(() => PROFILE_AVATARS[0]?.name || '');
@@ -567,26 +565,36 @@ const AdminScreen = () => {
             <h3 className="heist-font text-heist-yellow text-3xl mb-6 tracking-wider">LIVE RANKINGS</h3>
             <div className="flex-1 overflow-y-auto pr-2 pb-10">
               <div className="flex flex-col gap-3">
-                {sortedLeaderboard.map((t, idx) => (
-                  <div key={t.id} className="border border-gray-700 bg-black bg-opacity-80 p-4 flex items-center justify-between hover:border-heist-yellow transition-colors">
+                {sortedLeaderboard.map((t, idx) => {
+                  const isEliminated = t.status === 'eliminated';
+                  return (
+                  <div key={t.id} className={`border border-gray-700 bg-black bg-opacity-80 p-4 flex items-center justify-between transition-colors ${isEliminated ? 'opacity-50 grayscale' : 'hover:border-heist-yellow'}`}>
                     <div className="flex items-center gap-6">
-                      <span className={`heist-font text-4xl w-12 text-center ${idx < 3 ? 'text-heist-yellow' : 'text-gray-600'}`}>
+                      <span className={`heist-font text-4xl w-12 text-center ${isEliminated ? 'text-gray-800' : idx < 3 ? 'text-heist-yellow' : 'text-gray-600'}`}>
                         {String(idx + 1).padStart(2, '0')}
                       </span>
                       <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-700 bg-black flex-shrink-0">
                         <img src={t.avatarSrc} alt={t.name} className="w-full h-full object-cover" />
                       </div>
                       <div className="flex flex-col">
-                        <span className="heist-font text-3xl text-white tracking-widest uppercase">{t.name}</span>
-                        <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">Operator: {t.leader}</span>
+                        <span className={`heist-font text-3xl tracking-widest uppercase ${isEliminated ? 'text-heist-red line-through' : 'text-white'}`}>{t.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">Operator: {t.leader}</span>
+                          {isEliminated && (
+                            <span className="heist-mono text-[8px] uppercase tracking-widest text-heist-red border border-heist-red px-1.5 py-0.5 bg-red-950">
+                              ELIMINATED
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="heist-font text-4xl text-heist-yellow tracking-widest">{t.tokens}</span>
+                      <span className={`heist-font text-4xl tracking-widest ${isEliminated ? 'text-gray-800' : 'text-heist-yellow'}`}>{t.tokens}</span>
                       <span className="heist-mono text-[10px] text-gray-600 uppercase tracking-widest">TOKENS</span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
