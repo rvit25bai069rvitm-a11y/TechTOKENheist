@@ -3,7 +3,7 @@ import { useGameState } from '../hooks/useGameState';
 import {
   VenetianMask, Banknote, Lock, Bomb, Users, Search, Flame, Settings,
   Plus, X, Fingerprint, Wallet, Map, ScrollText, Crown, Zap, AlertTriangle, Clock,
-  Skull, Trophy, Swords
+  Skull, Trophy, Swords, Activity
 } from 'lucide-react';
 import DomainWheel from '../components/DomainWheel';
 import { buildQueueDiagnostics } from '../utils/matchmaking';
