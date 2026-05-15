@@ -87,14 +87,21 @@ const AdminScreen = () => {
   const [leader, setLeader] = useState('');
 
   const [actionInProgress, setActionInProgress] = useState(null); // track which action is running
+  const [lastError, setLastError] = useState(null);
 
   const safeAction = async (name, fn) => {
-    if (actionInProgress) return; // prevent double-click
+    if (actionInProgress) return; 
     setActionInProgress(name);
+    setLastError(null);
     try {
-      await fn();
+      const res = await fn();
+      if (res && res.success === false) {
+        setLastError({ action: name, message: res.error || 'Unknown error occurred' });
+        console.error(`[ADMIN] ${name} failed:`, res.error);
+      }
     } catch (err) {
-      console.error(`Action ${name} failed:`, err);
+      console.error(`[ADMIN] System Error in ${name}:`, err);
+      setLastError({ action: name, message: err.message });
     } finally {
       setActionInProgress(null);
     }
@@ -338,6 +345,20 @@ const AdminScreen = () => {
       <div className="panel-container border-2 border-heist-teal p-4 flex flex-col md:flex-row justify-between items-center relative z-10 gap-4 mt-2">
         <div className="flex items-center gap-4 w-full">
           <Zap className="text-heist-teal flex-shrink-0" size={32} />
+          <div className="flex-1 md:flex-none flex flex-col gap-2">
+            <h2 className="heist-font text-2xl tracking-widest text-white m-0">MISSION CONTROL</h2>
+            {lastError && (
+              <div className="bg-heist-red/10 border border-heist-red/50 p-2 flex items-center gap-2 animate-in slide-in-from-top-1">
+                <AlertTriangle size={14} className="text-heist-red shrink-0" />
+                <span className="heist-mono text-[10px] text-heist-red uppercase">
+                  ERROR IN {lastError.action}: {lastError.message}
+                </span>
+                <button onClick={() => setLastError(null)} className="ml-auto text-heist-red/50 hover:text-heist-red">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex flex-col">
             <div className="heist-font text-2xl tracking-wider text-white">
               {gameState.phase === 'phase2' ? 'PHASE 2 — WAGER MODE' : 'PHASE 1 — INFILTRATION'}

@@ -208,6 +208,13 @@ const useGameStateStore = create(
                 clearTimeout(timeoutId)
 
                 if (error) {
+                  // Enhanced logging for Vercel/Production
+                  console.group(`[ADMIN ACTION ERROR] ${act}`);
+                  console.error('Status:', error.status);
+                  console.error('Message:', error.message);
+                  console.error('Context:', error.context);
+                  console.groupEnd();
+
                   // Check if it's a retryable error (network, 5xx)
                   const isRetryable = error.message?.includes('Failed to fetch') ||
                     error.message?.includes('NetworkError') ||
@@ -216,15 +223,14 @@ const useGameStateStore = create(
                   if (isRetryable && attempt === 0) {
                     console.warn(`[${act}] Retryable error, attempt ${attempt + 1}:`, error.message)
                     lastError = error
-                    await new Promise(r => setTimeout(r, 500)) // Wait 500ms before retry
+                    await new Promise(r => setTimeout(r, 1000)) // Wait 1s before retry
                     continue
                   }
-                  console.error(`Error invoking ${act}:`, error)
-                  return { success: false, error: error.message }
+                  return { success: false, error: `${error.message}${error.status ? ` (Status: ${error.status})` : ''}` }
                 }
 
                 if (data && !data.success) {
-                  console.error(`${act} failed:`, data.error)
+                  console.error(`[ADMIN ACTION FAILED] ${act}:`, data.error)
                   return { success: false, error: data.error }
                 }
 
