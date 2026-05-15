@@ -8,6 +8,14 @@ const END_DURATION_MS = 12000;
 const toMillis = (value) => {
   if (!value) return null;
   if (typeof value === 'number') return value;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) {
+      const asNumber = Number(trimmed);
+      return Number.isNaN(asNumber) ? null : asNumber;
+    }
+  }
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
 };

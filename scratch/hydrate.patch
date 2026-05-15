@@ -1,0 +1,25 @@
+--- useGameState.jsx
++++ useGameState.jsx
+@@ -21,5 +21,6 @@
+   ...createInitialGameState(),
+   user: null,
+   countdown: null,
+   gameTimer: '00:00:00',
++  hasHydrated: false,
+ })
+@@ -148,6 +149,7 @@
+         syncQueryCache(createInitialGameState())
+       },
+       setCountdown: (countdown) => set({ countdown }),
+       setGameTimer: (gameTimer) => set({ gameTimer }),
++      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
+       _invoke: async (action, payload = {}) => {
+         try {
+@@ -213,4 +215,7 @@
+     {
+       name: 'heist-auth-storage',
+       partialize: (state) => ({ user: state.user }),
++      onRehydrateStorage: () => (state) => {
++        state?.setHasHydrated(true);
++      }
+     }

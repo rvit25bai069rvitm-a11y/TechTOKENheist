@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { queryClient } from '../lib/queryClient'
-import supabase from '../lib/supabase'
+import supabase, { hasSupabaseConfig } from '../lib/supabase'
 import { buildConstraintsFromHistory, getValidDomains, runMatchmaking } from '../utils/matchmaking'
 import { getProfileAvatar } from '../data/profileAvatars'
 
@@ -22,11 +22,17 @@ const createInitialClientState = () => ({
   user: null,
   countdown: null,
   gameTimer: '00:00:00',
+  hasHydrated: false,
 })
 
 let countdownInterval = null
 let timerInterval = null
 let fallbackPollInterval = null
+let refreshTimeout = null
+
+// Mutex to serialize admin _invoke calls and prevent concurrent edge-function storms
+let _invokeInFlight = false
+const _invokeQueue = []
 
 const normalizeTeam = (team) => {
   const memberNames = team?.member_names || team?.memberNames || []
@@ -39,8 +45,8 @@ const normalizeTeam = (team) => {
     status: team?.status || 'idle',
     tokens: team?.tokens ?? 1,
     totalTime: team?.total_time ?? team?.totalTime ?? 0,
-    timeoutUntil: team?.timeout_until ?? team?.timeoutUntil ?? null,
-    lastTokenUpdateTime: team?.last_token_update_time ?? team?.lastTokenUpdateTime ?? null,
+    timeoutUntil: toMillis(team?.timeout_until ?? team?.timeoutUntil ?? null),
+    lastTokenUpdateTime: toMillis(team?.last_token_update_time ?? team?.lastTokenUpdateTime ?? null),
   }
 }
 
@@ -51,6 +57,21 @@ const normalizeQueueEntry = (entry) => ({
   teamTokens: entry?.team_tokens ?? entry?.teamTokens ?? 0,
   matchedWith: entry?.matched_with || entry?.matchedWith || null,
 })
+
+const toMillis = (value) => {
+  if (!value) return null
+  if (typeof value === 'number') return value
+  if (typeof value === 'bigint') return Number(value)
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (/^\d+$/.test(trimmed)) {
+      const asNumber = Number(trimmed)
+      return Number.isNaN(asNumber) ? null : asNumber
+    }
+  }
+  const parsed = Date.parse(value)
+  return Number.isNaN(parsed) ? null : parsed
+}
 
 const upsertTeamRecord = async (teamData) => {
   try {
@@ -103,16 +124,19 @@ const resolveMyTeam = (state) => {
 }
 
 const getGameTimer = (gameState) => {
-  if (gameState.isGameActive && gameState.gameStartedAt) {
-    const elapsed = Date.now() - gameState.gameStartedAt
+  const startedAt = toMillis(gameState.gameStartedAt)
+  const pausedAt = toMillis(gameState.pausedAt)
+
+  if (gameState.isGameActive && startedAt) {
+    const elapsed = Date.now() - startedAt
     const hrs = String(Math.floor(elapsed / 3600000)).padStart(2, '0')
     const mins = String(Math.floor((elapsed % 3600000) / 60000)).padStart(2, '0')
     const secs = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, '0')
     return `${hrs}:${mins}:${secs}`
   }
 
-  if (gameState.isPaused && gameState.gameStartedAt && gameState.pausedAt) {
-    const elapsed = gameState.pausedAt - gameState.gameStartedAt
+  if (gameState.isPaused && startedAt && pausedAt) {
+    const elapsed = pausedAt - startedAt
     const hrs = String(Math.floor(elapsed / 3600000)).padStart(2, '0')
     const mins = String(Math.floor((elapsed % 3600000) / 60000)).padStart(2, '0')
     const secs = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, '0')
@@ -123,34 +147,11 @@ const getGameTimer = (gameState) => {
 }
 
 const enforceWagerEliminations = async () => {
-  const { data: zeroTokenTeams } = await supabase
-    .from('teams')
-    .select('id, name, status, tokens')
-    .lte('tokens', 0)
-    .neq('status', 'eliminated')
-
-  if (!zeroTokenTeams || zeroTokenTeams.length === 0) return []
-
-  const teamIds = zeroTokenTeams.map((team) => team.id)
-  await supabase
-    .from('teams')
-    .update({ status: 'eliminated', timeout_until: null, last_token_update_time: Date.now() })
-    .in('id', teamIds)
-
-  await supabase.from('matchmaking_queue').delete().in('team_id', teamIds)
-
   try {
-    await supabase.from('notifications').insert(
-      zeroTokenTeams.map((team) => ({
-        message: `${team.name} eliminated in WAGER mode (0 tokens).`,
-        time: new Date().toLocaleTimeString(),
-      }))
-    )
-  } catch {
-    // Notifications are best-effort; elimination state is already persisted.
+    await supabase.functions.invoke('game-actions', { body: { action: 'enforceWagerEliminations' } })
+  } catch (err) {
+    console.error('enforceWagerEliminations failed:', err)
   }
-
-  return teamIds
 }
 
 const useGameStateStore = create(
@@ -172,480 +173,137 @@ const useGameStateStore = create(
       },
       setCountdown: (countdown) => set({ countdown }),
       setGameTimer: (gameTimer) => set({ gameTimer }),
-      login: (username, password) => {
-        return (async () => {
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
+      _invoke: async (action, payload = {}) => {
+        // Serialize all invoke calls to prevent concurrent edge-function storms
+        if (_invokeInFlight) {
+          return new Promise((resolve) => {
+            _invokeQueue.push({ action, payload, resolve })
+          })
+        }
+        _invokeInFlight = true
+
+        const executeInvoke = async (act, pl) => {
           try {
-            // Admin login check (Credentials moved to database to prevent hardcoded exposure)
-            const { data: authRecord } = await supabase
-              .from('system')
-              .select('status')
-              .eq('key', 'admin_credential')
-              .maybeSingle()
-
-            if (authRecord && authRecord.status === window.btoa(`${username}:${password}`)) {
-              set({ user: { role: 'admin', teamId: null, teamName: null } })
-              return { success: true, role: 'admin' }
+            if (!hasSupabaseConfig) {
+              console.error(`Cannot invoke ${act}: Supabase is not configured for this build.`)
+              return { success: false, error: 'Supabase is not configured for this build.' }
             }
 
-            const { data: team, error } = await supabase
-              .from('teams')
-              .select('*')
-              .ilike('name', username)
-              .limit(1)
-              .maybeSingle()
+            const token = get().user?.token
 
-            if (error) return { success: false, error: error.message }
-            if (!team) return { success: false, error: 'Invalid username or password' }
-            // If the teams table has no password column, allow login when the team exists (dev mode)
-            if (team.password === undefined) {
-              set({ user: { role: 'player', teamId: team.id, teamName: team.name, avatarSrc: getProfileAvatar(team.name) } })
-              return { success: true, role: 'player', teamId: team.id, teamName: team.name }
+            // Use AbortController with a generous timeout so requests never hang indefinitely
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 20000) // 20s timeout
+
+            let lastError = null
+            // Try up to 2 times (initial + 1 retry) for network failures
+            for (let attempt = 0; attempt < 2; attempt++) {
+              try {
+                const { data, error } = await supabase.functions.invoke('game-actions', {
+                  body: { action: act, payload: pl },
+                  headers: token ? { 'x-game-token': token } : {},
+                })
+
+                clearTimeout(timeoutId)
+
+                if (error) {
+                  // Check if it's a retryable error (network, 5xx)
+                  const isRetryable = error.message?.includes('Failed to fetch') ||
+                    error.message?.includes('NetworkError') ||
+                    error.message?.includes('fetch') ||
+                    error.status >= 500
+                  if (isRetryable && attempt === 0) {
+                    console.warn(`[${act}] Retryable error, attempt ${attempt + 1}:`, error.message)
+                    lastError = error
+                    await new Promise(r => setTimeout(r, 500)) // Wait 500ms before retry
+                    continue
+                  }
+                  console.error(`Error invoking ${act}:`, error)
+                  return { success: false, error: error.message }
+                }
+
+                if (data && !data.success) {
+                  console.error(`${act} failed:`, data.error)
+                  return { success: false, error: data.error }
+                }
+
+                // Fire-and-forget: kick off a refetch but don't wait for it
+                // This prevents _invoke from hanging if the refetch is slow/blocked
+                try { get().triggerFetchPublicState?.() } catch { }
+
+                return { success: true, data: data?.data }
+              } catch (fetchErr) {
+                clearTimeout(timeoutId)
+                lastError = fetchErr
+                if (fetchErr.name === 'AbortError') {
+                  console.error(`[${act}] Request timed out after 20s`)
+                  return { success: false, error: 'Request timed out' }
+                }
+                if (attempt === 0) {
+                  console.warn(`[${act}] Network error, retrying in 500ms:`, fetchErr.message)
+                  await new Promise(r => setTimeout(r, 500))
+                  continue
+                }
+              }
             }
 
-            if (team.password !== password) return { success: false, error: 'Invalid username or password' }
-
-            set({ user: { role: 'player', teamId: team.id, teamName: team.name, avatarSrc: getProfileAvatar(team.name) } })
-            return { success: true, role: 'player', teamId: team.id, teamName: team.name }
-          } catch (err) {
-            return { success: false, error: err.message }
+            // Both attempts failed
+            console.error(`Error invoking ${act} after retries:`, lastError)
+            return { success: false, error: lastError?.message || 'Network error' }
+          } finally {
+            // Drain the queue: execute the next queued invoke
+            if (_invokeQueue.length > 0) {
+              const next = _invokeQueue.shift()
+              executeInvoke(next.action, next.payload).then(next.resolve)
+            } else {
+              _invokeInFlight = false
+            }
           }
-        })()
+        }
+
+        return executeInvoke(action, payload)
+      },
+      login: async (username, password) => {
+        const res = await get()._invoke('login', { username, password });
+        if (!res.success) return res;
+
+        const { role, token, teamId, teamName } = res.data || {};
+
+        if (role === 'admin') {
+          set({ user: { role: 'admin', teamId: null, teamName: null, token } });
+          return { success: true, role: 'admin' };
+        } else {
+          set({ user: { role: 'player', teamId, teamName, avatarSrc: getProfileAvatar(teamName), token } });
+          return { success: true, role: 'player', teamId, teamName };
+        }
       },
       logout: () => set({ user: null }),
-      joinQueue: async () => {
-        const myTeam = resolveMyTeam(get())
-        if (!myTeam) return
-        if (myTeam.status !== 'idle' || myTeam.tokens <= 0 || myTeam.status === 'eliminated') return
-        // Prevent duplicate queue entries
-        const { data: existing } = await supabase.from('matchmaking_queue').select('id').eq('team_id', myTeam.id).maybeSingle()
-        if (existing) return
-        await supabase.from('matchmaking_queue').insert([{ team_id: myTeam.id, team_name: myTeam.name, team_tokens: myTeam.tokens }])
-      },
-      leaveQueue: async () => {
-        const myTeam = resolveMyTeam(get())
-        if (!myTeam) return
-        if (myTeam.status === 'eliminated') return
-        await supabase.from('matchmaking_queue').delete().eq('team_id', myTeam.id)
-      },
-      // PRD 4.2: Auto-enroll ALL eligible teams into queue
-      enrollAllEligible: async () => {
-        const { data: allTeams } = await supabase.from('teams').select('*')
-        const { data: queueRows } = await supabase.from('matchmaking_queue').select('team_id')
-        const { data: matchRows } = await supabase.from('active_matches').select('team_a, team_b')
-        const inQueue = new Set((queueRows || []).map(q => q.team_id))
-        const inMatch = new Set()
-        for (const m of (matchRows || [])) { inMatch.add(m.team_a); inMatch.add(m.team_b) }
-
-        const toEnroll = (allTeams || []).filter(t =>
-          t.status !== 'eliminated' && t.status !== 'timeout' && t.status !== 'fighting' &&
-          !inQueue.has(t.id) && !inMatch.has(t.id)
-        )
-        if (toEnroll.length > 0) {
-          await supabase.from('matchmaking_queue').insert(
-            toEnroll.map(t => ({ team_id: t.id, team_name: t.name, team_tokens: t.tokens }))
-          )
-        }
-      },
-      startGame: async () => {
-        const { data: sys } = await supabase.from('system').select('*').eq('key', 'game').limit(1).maybeSingle()
-        const isResume = sys?.is_paused
-        await supabase.from('system').update({
-          is_game_active: true, is_paused: false, status: 'active',
-          game_started_at: isResume ? (sys?.game_started_at || Date.now()) : Date.now(),
-          paused_at: null
-        }).eq('key', 'game')
-
-        if (sys?.phase === 'phase2') {
-          await enforceWagerEliminations()
-        }
-
-        // Auto-enroll all eligible teams
-        await get().enrollAllEligible()
-        get().autoMatchPairs()
-      },
-      stopGame: async () => {
-        await supabase.from('system').update({ is_game_active: false, is_paused: true, paused_at: Date.now(), status: 'paused' }).eq('key', 'game')
-        try {
-          await supabase.from('notifications').insert([{ message: `Mission on HOLD by Command.`, time: new Date().toLocaleTimeString() }])
-        } catch {
-          // Pause notification is best-effort.
-        }
-      },
-      resetGame: async () => {
-        // Clear runtime state and credentials, but keep the 24 profile identities in place.
-        await supabase.from('matchmaking_queue').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-        await supabase.from('active_matches').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-        await supabase.from('match_history').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-        await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-        await supabase.from('token_history').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-
-        const { data: teamsToReset } = await supabase.from('teams').select('id, name')
-        await Promise.all((teamsToReset || []).map((team) => supabase.from('teams').update({
-          member_names: [team.name],
-          leader: team.name,
-          password: 'password123',
-          tokens: 1,
-          status: 'idle',
-          timeout_until: null,
-          last_token_update_time: null,
-        }).eq('id', team.id)))
-
-        await supabase.from('system').update({
-          is_game_active: false,
-          is_paused: false,
-          status: 'not_started',
-          phase: 'phase1',
-          game_started_at: null,
-          paused_at: null,
-          timeout_duration_override: null,
-          domains: ['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition']
-        }).eq('key', 'game')
-      },
-      togglePhase: async () => {
-        const { data: sys } = await supabase.from('system').select('*').eq('key', 'game').limit(1).maybeSingle()
-        const newPhase = sys?.phase === 'phase2' ? 'phase1' : 'phase2'
-        await supabase.from('system').update({ phase: newPhase }).eq('key', 'game')
-        try {
-          await supabase.from('notifications').insert([{ message: `System override: INITIATING ${newPhase === 'phase2' ? 'PHASE 02 (WAGER)' : 'PHASE 01 (STANDARD)'}.`, time: new Date().toLocaleTimeString() }])
-        } catch {
-          // Phase notification is best-effort.
-        }
-        if (newPhase === 'phase2') {
-          // WAGER MODE CLEAN SLATE: Clear Phase 1 match history so constraints start fresh
-          // Only tokens carry over — no opponent/domain history from Phase 1
-          await supabase.from('match_history').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-          await enforceWagerEliminations()
-          // Re-enroll all eligible teams for fresh wager matchmaking
-          await get().enrollAllEligible()
-        }
-        get().triggerFetchPublicState?.()
-      },
-      createTeam: async (teamData) => {
-        const teamId = await upsertTeamRecord({ ...teamData, tokens: 1, status: 'idle' })
-
-        // PRD 4.2: If game is active, auto-enroll the new team immediately
-        const state = get()
-        if (teamId && state.gameState.isGameActive && !state.gameState.isPaused) {
-          try {
-            await supabase.from('matchmaking_queue').insert([{
-              team_id: teamId,
-              team_name: teamData.name,
-              team_tokens: 1
-            }])
-            await supabase.from('notifications').insert([{ message: `${teamData.name} has joined the heist.`, time: new Date().toLocaleTimeString() }])
-          } catch (e) {
-            console.error('Failed to auto-enroll new team:', e)
-          }
-        } else {
-          try {
-            await supabase.from('notifications').insert([{ message: `New crew recruited: ${teamData.name}.`, time: new Date().toLocaleTimeString() }])
-          } catch {
-            // Team creation notification is best-effort.
-          }
-        }
-
-        if (get().triggerFetchPublicState) {
-          await get().triggerFetchPublicState()
-        }
-      },
-      editTeam: async (teamData) => {
-        await supabase.from('teams').update(teamData).eq('id', teamData.id)
-        get().triggerFetchPublicState?.()
-      },
-      deleteTeam: async (id) => {
-        await supabase.from('teams').delete().eq('id', id)
-        get().triggerFetchPublicState?.()
-      },
-      updateTokens: async (teamId, amount, reason) => {
-        const { data: team } = await supabase.from('teams').select('name,tokens,status').eq('id', teamId).limit(1).maybeSingle()
-        if (!team) return
-        const newTokens = team.tokens + amount;
-        const updates = { tokens: Math.max(0, newTokens), last_token_update_time: Date.now() };
-
-        const { data: system } = await supabase.from('system').select('*').eq('key', 'game').limit(1).maybeSingle();
-        const isPhase2 = system?.phase === 'phase2';
-
-        if (newTokens > 0 && team.status === 'timeout') {
-          updates.status = 'idle';
-          updates.timeout_until = null;
-        } else if (newTokens <= 0) {
-          if (isPhase2) {
-            updates.status = 'eliminated';
-            updates.timeout_until = null;
-          } else if (team.status !== 'timeout') {
-            updates.status = 'timeout';
-            let timeoutMs = 5 * 60 * 1000;
-            if (system?.timeout_duration_override) {
-              timeoutMs = system.timeout_duration_override;
-            } else if (system?.game_started_at) {
-              const elapsed = Date.now() - system.game_started_at;
-              timeoutMs = elapsed <= 30 * 60 * 1000 ? 5 * 60 * 1000 : 15 * 60 * 1000;
-            }
-            updates.timeout_until = Date.now() + timeoutMs;
-          }
-          // Remove from queue if they hit 0
-          await supabase.from('matchmaking_queue').delete().eq('team_id', teamId);
-        }
-
-        await supabase.from('teams').update(updates).eq('id', teamId);
-        try {
-          await supabase.from('notifications').insert([{
-            message: `Admin adjusted tokens for ${team?.name || 'Unknown'}: ${amount > 0 ? '+' : ''}${amount} TKN${reason ? ` (${reason})` : ''}.`,
-            time: new Date().toLocaleTimeString()
-          }])
-        } catch {
-          // Token adjustment notification is best-effort.
-        }
-        get().triggerFetchPublicState?.();
-      },
-      recoverFromTimeout: async (teamId, teamName) => {
-        // Only recover if they are still in timeout to prevent duplicate calls
-        const { data: team } = await supabase.from('teams').select('status').eq('id', teamId).limit(1).maybeSingle();
-        if (team?.status !== 'timeout') return;
-
-        await supabase.from('teams').update({ tokens: 1, status: 'idle', timeout_until: null, last_token_update_time: Date.now() }).eq('id', teamId);
-
-        // Auto re-enroll
-        const { data: inQueue } = await supabase.from('matchmaking_queue').select('id').eq('team_id', teamId).maybeSingle();
-        if (!inQueue) {
-          await supabase.from('matchmaking_queue').insert([{ team_id: teamId, team_name: teamName, team_tokens: 1 }]);
-        }
-        get().triggerFetchPublicState?.();
-      },
-      createMatch: async (teamAId, teamBId, domain) => {
-        const { data: teamA } = await supabase.from('teams').select('id,name,tokens,status').eq('id', teamAId).limit(1).maybeSingle()
-        const { data: teamB } = await supabase.from('teams').select('id,name,tokens,status').eq('id', teamBId).limit(1).maybeSingle()
-        if (!teamA || !teamB) return null
-        if (teamA.status === 'eliminated' || teamB.status === 'eliminated') return null
-        if ((teamA.tokens ?? 0) <= 0 || (teamB.tokens ?? 0) <= 0) return null
-
-        // MATCH LOCKING: Prevent double-booking — check if either team is already in an active match
-        const { data: existingA } = await supabase.from('active_matches').select('id').or(`team_a.eq.${teamAId},team_b.eq.${teamAId}`).limit(1).maybeSingle()
-        const { data: existingB } = await supabase.from('active_matches').select('id').or(`team_a.eq.${teamBId},team_b.eq.${teamBId}`).limit(1).maybeSingle()
-        if (existingA || existingB) {
-          console.warn('Match lock violation: one of the teams is already in an active match')
-          return null
-        }
-
-        const { data: match } = await supabase
-          .from('active_matches')
-          .insert([
-            {
-              team_a: teamAId,
-              team_b: teamBId,
-              domain,
-              start_time: Date.now(),
-              teamA: teamA ? { id: teamA.id, name: teamA.name, tokens: teamA.tokens, status: 'fighting' } : null,
-              teamB: teamB ? { id: teamB.id, name: teamB.name, tokens: teamB.tokens, status: 'fighting' } : null,
-            },
-          ])
-          .select()
-          .maybeSingle()
-        await supabase.from('matchmaking_queue').delete().or(`team_id.eq.${teamAId},team_id.eq.${teamBId}`)
-        await supabase.from('teams').update({ status: 'fighting' }).in('id', [teamAId, teamBId])
-        try {
-          await supabase.from('notifications').insert([{ message: `Match started: ${teamA?.name || teamAId} vs ${teamB?.name || teamBId}`, time: new Date().toLocaleTimeString() }])
-        } catch {
-          // Match-start notification is best-effort.
-        }
-        return match
-      },
-      declareWinner: async (matchId, winnerId) => {
-        const { data: match } = await supabase.from('active_matches').select('*').eq('id', matchId).limit(1).maybeSingle()
-        if (!match) return
-        const { data: system } = await supabase.from('system').select('*').eq('key', 'game').limit(1).maybeSingle()
-        const loserId = match.team_a === winnerId ? match.team_b : match.team_a
-
-        const { data: winnerTeam } = await supabase.from('teams').select('*').eq('id', winnerId).limit(1).maybeSingle()
-        const { data: loserTeam } = await supabase.from('teams').select('*').eq('id', loserId).limit(1).maybeSingle()
-        if (!winnerTeam || !loserTeam) {
-          await supabase.from('active_matches').delete().eq('id', matchId)
-          return
-        }
-
-        // PRD 4.6: Any match ending while Phase 2 is active follows wager rules
-        const isWager = Boolean(match?.is_wager || match?.isWager || system?.phase === 'phase2')
-
-        let winnerTokens, loserTokens, loserStatus
-        const wTk = winnerTeam.tokens ?? 1
-        const lTk = loserTeam.tokens ?? 1
-
-        if (isWager) {
-          // Wager Mode token transfer (corrected formula)
-          if (wTk >= lTk) {
-            // Higher-token (or equal) team wins → takes ALL loser tokens → loser eliminated
-            winnerTokens = wTk + lTk
-            loserTokens = 0
-            loserStatus = 'eliminated'
-          } else {
-            // Underdog wins: transfer floor(mean) tokens from loser (higher) to winner (lower)
-            // Example: A=15, B=5, B wins → mean=floor(20/2)=10 → A=15-10=5, B=5+10=15
-            const mean = Math.floor((wTk + lTk) / 2)
-            winnerTokens = wTk + mean   // underdog gains mean
-            loserTokens = lTk - mean    // favorite loses mean
-            loserStatus = loserTokens <= 0 ? 'eliminated' : 'idle'
-          }
-        } else {
-          // Phase 1: +1/-1
-          winnerTokens = wTk + 1
-          loserTokens = Math.max(0, lTk - 1)
-          if (loserTokens === 0) {
-            // PRD 4.5: Dynamic timeout duration
-            loserStatus = 'timeout'
-          } else {
-            loserStatus = 'idle'
-          }
-        }
-
-        // PRD 4.5: Calculate timeout duration dynamically
-        let timeoutMs = null
-        if (loserStatus === 'timeout') {
-          const gameStartedAt = system?.game_started_at
-          const override = system?.timeout_duration_override
-          if (override) {
-            timeoutMs = override
-          } else if (gameStartedAt) {
-            const elapsed = Date.now() - gameStartedAt
-            timeoutMs = elapsed <= 30 * 60 * 1000 ? 5 * 60 * 1000 : 15 * 60 * 1000
-          } else {
-            timeoutMs = 5 * 60 * 1000
-          }
-        }
-
-        await supabase.from('teams').update({
-          tokens: winnerTokens, status: 'idle',
-          last_token_update_time: Date.now(), timeout_until: null,
-        }).eq('id', winnerId)
-
-        await supabase.from('teams').update({
-          tokens: loserTokens, status: loserStatus,
-          last_token_update_time: Date.now(),
-          timeout_until: loserStatus === 'timeout' ? Date.now() + timeoutMs : null,
-        }).eq('id', loserId)
-
-        const winDelta = winnerTokens - wTk
-        const loseDelta = loserTokens - lTk
-        try {
-          await supabase.from('token_history').insert([
-            { team: winnerTeam.name, change: `+${winDelta}`, reason: isWager ? 'Wager win' : 'Match win', timestamp: new Date().toLocaleTimeString() },
-            { team: loserTeam.name, change: `${loseDelta}`, reason: isWager ? 'Wager loss' : 'Match loss', timestamp: new Date().toLocaleTimeString() },
-          ])
-        } catch {
-          // Token history is best-effort; team token state is authoritative.
-        }
-
-        try {
-          await supabase.from('notifications').insert([
-            { message: `${winnerTeam.name} defeated ${loserTeam.name}${isWager ? ' (WAGER)' : ''}`, time: new Date().toLocaleTimeString() },
-          ])
-        } catch {
-          // Match result notification is best-effort.
-        }
-
-        try {
-          await supabase.from('match_history')
-            .insert([{ id: `mh_${matchId}`, winner: winnerTeam.name, loser: loserTeam.name, domain: match.domain, timestamp: new Date().toLocaleTimeString(), is_wager: isWager }])
-        } catch {
-          await supabase.from('match_history')
-            .insert([{ id: `mh_${matchId}`, winner: winnerTeam.name, loser: loserTeam.name, domain: match.domain, timestamp: new Date().toLocaleTimeString() }])
-        }
-        await supabase.from('active_matches').delete().eq('id', matchId)
-
-        // AUTO RE-ENQUEUE: After match ends, auto re-queue both teams if eligible
-        const { data: sysCheck } = await supabase.from('system').select('*').eq('key', 'game').limit(1).maybeSingle()
-        if (sysCheck?.is_game_active && !sysCheck?.is_paused) {
-          const reEnqueue = async (teamId, teamName, status, tokens) => {
-            if (status === 'eliminated' || status === 'timeout' || tokens <= 0) return
-            const { data: alreadyInQueue } = await supabase.from('matchmaking_queue').select('id').eq('team_id', teamId).maybeSingle()
-            if (!alreadyInQueue) {
-              await supabase.from('matchmaking_queue').insert([{ team_id: teamId, team_name: teamName, team_tokens: tokens }])
-            }
-          }
-          await reEnqueue(winnerId, winnerTeam.name, 'idle', winnerTokens)
-          await reEnqueue(loserId, loserTeam.name, loserStatus, loserTokens)
-        }
-
-        get().triggerFetchPublicState?.()
-      },
-      spinDomain: async (matchId, preferredDomain) => {
-        // PRD 4.3: Domain assignment with constraint validation
-        const { data: match } = await supabase.from('active_matches').select('*').eq('id', matchId).limit(1).maybeSingle()
-        if (!match) return { domain: preferredDomain || 'TBD' }
-
-        const { data: historyRows } = await supabase.from('match_history').select('*')
-        const { data: teamsRows } = await supabase.from('teams').select('*')
-        const { data: system } = await supabase.from('system').select('*').eq('key', 'game').limit(1).maybeSingle()
-
-        const teams = (teamsRows || []).map(normalizeTeam)
-        const constraints = buildConstraintsFromHistory(historyRows || [], teams)
-        const allDomains = system?.domains || ['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition']
-
-        const teamA = teams.find(t => t.id === match.team_a)
-        const teamB = teams.find(t => t.id === match.team_b)
-        const validDomains = getValidDomains({ teamA, teamB, matchConstraints: constraints, allDomains })
-
-        let domain = preferredDomain
-        if (!domain || !validDomains.includes(domain)) {
-          // Pick random from valid domains, or fallback to any domain
-          domain = validDomains.length > 0
-            ? validDomains[Math.floor(Math.random() * validDomains.length)]
-            : allDomains[Math.floor(Math.random() * allDomains.length)]
-        }
-
-        await supabase.from('active_matches').update({ domain }).eq('id', matchId)
-        return { domain, validDomains }
-      },
-      updateDomains: async (domains) => {
-        await supabase.from('system').update({ domains }).eq('key', 'game')
-      },
-      setTimeoutDuration: async (durationMs) => {
-        await supabase.from('system').update({ timeout_duration_override: durationMs }).eq('key', 'game')
-      },
-      autoMatchPairs: async () => {
-        const state = get()
-        if (!state.gameState.isGameActive || state.gameState.isPaused) return
-
-        // Find all waiting teams that aren't matched yet
-        const waitingQueueIds = state.matchmakingQueue.filter(q => !q.matchedWith).map(q => q.teamId)
-        if (waitingQueueIds.length < 2) return
-
-        // CONCURRENCY GUARD: Get all team IDs currently in active matches
-        const teamsInActiveMatches = new Set()
-        ;(state.activeMatches || []).forEach(m => {
-          const aId = m.team_a || m.teamA?.id
-          const bId = m.team_b || m.teamB?.id
-          if (aId) teamsInActiveMatches.add(aId)
-          if (bId) teamsInActiveMatches.add(bId)
-        })
-
-        // Only consider teams NOT already fighting
-        const eligibleIds = waitingQueueIds.filter(id => !teamsInActiveMatches.has(id))
-        if (eligibleIds.length < 2) return
-
-        const waitingTeams = state.teams.filter(t => eligibleIds.includes(t.id))
-
-        // Run matchmaking engine
-        const pairs = runMatchmaking({
-          gameState: state.gameState,
-          teams: waitingTeams,
-          matchConstraints: state.matchConstraints,
-          existingMatches: state.activeMatches
-        })
-
-        if (pairs.length > 0) {
-          // Update Supabase to lock in the matched pairs
-          const updatePromises = pairs.flatMap(p => [
-            supabase.from('matchmaking_queue').update({ matched_with: p.teamBId }).eq('team_id', p.teamAId),
-            supabase.from('matchmaking_queue').update({ matched_with: p.teamAId }).eq('team_id', p.teamBId)
-          ])
-          await Promise.all(updatePromises)
-          get().triggerFetchPublicState?.()
-        }
-      },
+      joinQueue: async () => get()._invoke('joinQueue', { teamId: resolveMyTeam(get())?.id }),
+      leaveQueue: async () => get()._invoke('leaveQueue', { teamId: resolveMyTeam(get())?.id }),
+      enrollAllEligible: async () => get()._invoke('enrollAllEligible'),
+      startGame: async () => get()._invoke('startGame'),
+      stopGame: async () => get()._invoke('stopGame'),
+      resetGame: async () => get()._invoke('resetGame'),
+      togglePhase: async () => get()._invoke('togglePhase'),
+      createTeam: async (teamData) => get()._invoke('createTeam', teamData),
+      editTeam: async (teamData) => get()._invoke('editTeam', teamData),
+      deleteTeam: async (id) => get()._invoke('deleteTeam', { id }),
+      updateTokens: async (teamId, amount, reason) => get()._invoke('updateTokens', { teamId, amount, reason }),
+      recoverFromTimeout: async (teamId, teamName) => get()._invoke('recoverFromTimeout', { teamId, teamName }),
+      createMatch: async (teamAId, teamBId, domain) => get()._invoke('createMatch', { teamAId, teamBId, domain }),
+      declareWinner: async (matchId, winnerId) => get()._invoke('declareWinner', { matchId, winnerId }),
+      spinDomain: async (matchId, preferredDomain) => get()._invoke('spinDomain', { matchId, preferredDomain }),
+      updateDomains: async (domains) => get()._invoke('updateDomains', { domains }),
+      setTimeoutDuration: async (durationMs) => get()._invoke('setTimeoutDuration', { durationMs }),
+      autoMatchPairs: async () => get()._invoke('autoMatchPairs'),
     }),
     {
       name: 'heist-auth-storage',
       partialize: (state) => ({ user: state.user }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      }
     }
   )
 )
@@ -659,8 +317,16 @@ const useGameSocketBridge = () => {
 
   useEffect(() => {
     let channel = null
+    let fetchInFlight = false
+    let refreshQueued = false
 
     const fetchPublicState = async () => {
+      if (fetchInFlight) {
+        refreshQueued = true
+        return
+      }
+
+      fetchInFlight = true
       try {
         // Run all queries in parallel for the fastest "no lag" response
         const [
@@ -672,7 +338,7 @@ const useGameSocketBridge = () => {
           { data: notificationRows, error: notifErr },
           { data: tokenHistory, error: tokErr }
         ] = await Promise.all([
-          supabase.from('system').select('*'),
+          supabase.from('system').select('*').eq('key', 'game'),
           supabase.from('teams').select('*').order('name', { ascending: true }),
           supabase.from('matchmaking_queue').select('*'),
           supabase.from('active_matches').select('*'),
@@ -710,9 +376,10 @@ const useGameSocketBridge = () => {
           const teamBId = m.team_b || m.teamB?.id
           const teamA = m.teamA || (teamAId ? teamById[teamAId] : null)
           const teamB = m.teamB || (teamBId ? teamById[teamBId] : null)
+          const startTime = toMillis(m.start_time || m.startTime)
           return {
             ...m,
-            startTime: m.start_time || m.startTime || Date.now(),
+            startTime: startTime || Date.now(),
             isWager: Boolean(m.is_wager || m.isWager),
             teamA: teamA || { id: teamAId, name: 'Unknown', tokens: 0, status: 'idle' },
             teamB: teamB || { id: teamBId, name: 'Unknown', tokens: 0, status: 'idle' },
@@ -740,8 +407,8 @@ const useGameSocketBridge = () => {
             isPaused: system.is_paused || false,
             status: system.status || 'not_started',
             phase: system.phase || 'phase1',
-            gameStartedAt: system.game_started_at || null,
-            pausedAt: system.paused_at || null,
+            gameStartedAt: toMillis(system.game_started_at),
+            pausedAt: toMillis(system.paused_at),
             domains: system.domains || [],
             timeoutDurationOverride: system.timeout_duration_override || null,
           },
@@ -760,7 +427,21 @@ const useGameSocketBridge = () => {
 
       } catch (err) {
         console.error('Failed to fetch public state from Supabase', err)
+      } finally {
+        fetchInFlight = false
+        if (refreshQueued) {
+          refreshQueued = false
+          scheduleRefresh(0)
+        }
       }
+    }
+
+    const scheduleRefresh = (delay = 120) => {
+      if (refreshTimeout) clearTimeout(refreshTimeout)
+      refreshTimeout = setTimeout(() => {
+        refreshTimeout = null
+        fetchPublicState()
+      }, delay)
     }
 
     // Assign fetchPublicState to the store so mutations can trigger it manually for "No Lag" instant updates
@@ -772,14 +453,15 @@ const useGameSocketBridge = () => {
     channel = supabase.channel('public-state')
     tables.forEach((t) => {
       channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
-        fetchPublicState()
+        scheduleRefresh(120)
       })
     })
     channel.subscribe()
 
     // Fallback polling keeps UI synced even if realtime is not enabled in Supabase.
+    // Use 4s interval (was 2s) to reduce concurrent load on Supabase
     if (fallbackPollInterval) clearInterval(fallbackPollInterval)
-    fallbackPollInterval = setInterval(fetchPublicState, 5000)
+    fallbackPollInterval = setInterval(() => scheduleRefresh(0), 4000)
 
     return () => {
       try {
@@ -789,6 +471,8 @@ const useGameSocketBridge = () => {
       }
       if (fallbackPollInterval) clearInterval(fallbackPollInterval)
       fallbackPollInterval = null
+      if (refreshTimeout) clearTimeout(refreshTimeout)
+      refreshTimeout = null
       if (countdownInterval) clearInterval(countdownInterval)
       if (timerInterval) clearInterval(timerInterval)
     }
@@ -815,8 +499,11 @@ const useGameSocketBridge = () => {
   }, [isGameActive, isPaused, gameStartedAt, pausedAt, setGameTimer])
 
   // Real-time timeout recovery interval
+  // Use 5s interval (was 1s) to avoid hammering edge functions with concurrent calls
   useEffect(() => {
-    const recoveryInterval = setInterval(() => {
+    let recoveryRunning = false
+    const recoveryInterval = setInterval(async () => {
+      if (recoveryRunning) return // Skip if previous recovery is still running
       const state = useGameStateStore.getState()
       const now = Date.now()
 
@@ -826,26 +513,38 @@ const useGameSocketBridge = () => {
       const userRole = state.user?.role
 
       if (myTeam && myTeam.status === 'timeout' && myTeam.timeoutUntil && myTeam.timeoutUntil <= now) {
-        state.recoverFromTimeout(myTeam.id, myTeam.name)
+        recoveryRunning = true
+        await state.recoverFromTimeout(myTeam.id, myTeam.name).finally(() => { recoveryRunning = false })
       } else if (userRole === 'admin') {
         const expired = state.teams.filter(t => t.status === 'timeout' && t.timeoutUntil && t.timeoutUntil <= now)
-        expired.forEach(t => state.recoverFromTimeout(t.id, t.name))
+        if (expired.length > 0) {
+          recoveryRunning = true
+          // Recover one at a time sequentially to avoid flooding the queue
+          for (const t of expired) {
+            await state.recoverFromTimeout(t.id, t.name)
+          }
+          recoveryRunning = false
+        }
       }
-    }, 1000)
+    }, 5000)
 
     return () => clearInterval(recoveryInterval)
   }, [])
 
   // Real-time matchmaking engine (Admin only)
+  // Use 8s interval (was 3s) to prevent edge-function concurrency storms
   useEffect(() => {
     if (socketUser?.role !== 'admin') return
 
-    const matchmakingInterval = setInterval(() => {
+    let matchmakingRunning = false
+    const matchmakingInterval = setInterval(async () => {
+      if (matchmakingRunning) return // Skip if previous matchmaking call is still running
       const state = useGameStateStore.getState()
       if (state.gameState.isGameActive && !state.gameState.isPaused) {
-        state.autoMatchPairs()
+        matchmakingRunning = true
+        await state.autoMatchPairs().finally(() => { matchmakingRunning = false })
       }
-    }, 3000) // Run matchmaking every 3 seconds
+    }, 8000)
 
     return () => clearInterval(matchmakingInterval)
   }, [socketUser?.role])
@@ -854,7 +553,9 @@ const useGameSocketBridge = () => {
   useEffect(() => {
     if (socketUser?.role !== 'player') return
 
+    let enrollRunning = false
     const autoEnrollInterval = setInterval(async () => {
+      if (enrollRunning) return // Skip if previous enroll call is still running
       const state = useGameStateStore.getState()
       if (!state.gameState.isGameActive || state.gameState.isPaused) return
 
@@ -877,8 +578,9 @@ const useGameSocketBridge = () => {
       })
       if (inMatch) return
 
-      await state.joinQueue()
-    }, 2000) // Check every 2 seconds
+      enrollRunning = true
+      await state.joinQueue().finally(() => { enrollRunning = false })
+    }, 5000) // Check every 5 seconds (was 2s)
 
     return () => clearInterval(autoEnrollInterval)
   }, [socketUser?.role])

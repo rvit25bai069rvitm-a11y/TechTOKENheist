@@ -18,7 +18,10 @@ const LoginScreen = () => {
     setLoading(true);
 
     try {
+      console.log(`Attempting login for: ${username.trim()}`);
       const result = await login(username.trim(), password);
+      console.log('Login result:', result);
+      
       if (result.success) {
         if (result.role === 'admin') {
           navigate('/admin');
@@ -28,7 +31,8 @@ const LoginScreen = () => {
       } else {
         setError(result.error || 'Access Denied');
       }
-    } catch {
+    } catch (err) {
+      console.error('Login error:', err);
       setError('Connection to The Professor lost.');
     }
     setLoading(false);

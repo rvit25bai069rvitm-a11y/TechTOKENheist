@@ -54,9 +54,24 @@ const LobbyScreen = () => {
           </div>
           
           <div className="hidden lg:block">
-            <div className="relative w-48 h-48 opacity-20 group-hover:opacity-40 transition-opacity duration-700">
-               <img src="/icons/closedbank.png" alt="Bank" className="w-full h-full object-contain filter grayscale invert" />
-               <div className="absolute inset-0 bg-red-600/20 mix-blend-overlay"></div>
+            <div className={`relative w-48 h-48 transition-all duration-700 ${
+              gameState.isGameActive 
+                ? 'opacity-40 hover:opacity-100 hover:scale-105' 
+                : 'opacity-20 group-hover:opacity-40'
+            }`}>
+               <img 
+                 src={gameState.isGameActive ? "/icons/openbank.png" : "/icons/closedbank.png"} 
+                 alt="Bank" 
+                 className={`w-full h-full object-contain transition-all duration-500 ${
+                   gameState.isGameActive 
+                     ? 'filter grayscale hover:grayscale-0' 
+                     : 'filter grayscale invert'
+                 }`} 
+               />
+               {gameState.isGameActive && (
+                 <div className="absolute -inset-4 bg-red-600/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
+               )}
+               <div className="absolute inset-0 bg-red-600/20 mix-blend-overlay pointer-events-none"></div>
             </div>
           </div>
         </div>

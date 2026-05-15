@@ -4,6 +4,7 @@ import { GameStateProvider, useGameState } from './hooks/useGameState';
 import { LayoutDashboard, Swords, Crosshair, Book, Eye, Zap, VenetianMask, Users } from 'lucide-react';
 import CountdownOverlay from './components/CountdownOverlay';
 import MatchStartOverlay from './components/MatchStartOverlay';
+import FinaleOverlay from './components/FinaleOverlay';
 import gdgLogo from '../assets/gdg.png';
 
 import './PlayerLayout.css';
@@ -190,41 +191,66 @@ const PlayerLayout = ({ children }) => {
 
 
 const AppContent = () => {
-  const { user, countdown } = useGameState();
+  const { user, countdown, hasHydrated } = useGameState();
+
+  if (!hasHydrated) return null;
 
   return (
     <>
       <CountdownOverlay count={countdown} />
       {user?.role !== 'admin' && <MatchStartOverlay />}
+      <FinaleOverlay />
       <Suspense fallback={<div className="route-loading" />}>
         <Routes>
           {/* Public */}
           <Route path="/" element={<LandingScreen />} />
           <Route path="/login" element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/lobby'} /> : <LoginScreen />} />
+          <Route path="/login.html" element={user ? <Navigate to={user.role === 'admin' ? '/admin.html' : '/lobby.html'} /> : <LoginScreen />} />
 
           {/* Player Routes */}
           <Route path="/lobby" element={
             user ? <PlayerLayout><LobbyScreen /></PlayerLayout> : <Navigate to="/login" />
           } />
+          <Route path="/lobby.html" element={
+            user ? <PlayerLayout><LobbyScreen /></PlayerLayout> : <Navigate to="/login.html" />
+          } />
           <Route path="/arena" element={
             user ? <PlayerLayout><ArenaScreen /></PlayerLayout> : <Navigate to="/login" />
+          } />
+          <Route path="/arena.html" element={
+            user ? <PlayerLayout><ArenaScreen /></PlayerLayout> : <Navigate to="/login.html" />
           } />
           <Route path="/battle" element={
             user ? <PlayerLayout><BattleScreen /></PlayerLayout> : <Navigate to="/login" />
           } />
+          <Route path="/battle.html" element={
+            user ? <PlayerLayout><BattleScreen /></PlayerLayout> : <Navigate to="/login.html" />
+          } />
           <Route path="/rulebook" element={
             user ? <PlayerLayout><RulebookScreen /></PlayerLayout> : <Navigate to="/login" />
+          } />
+          <Route path="/rulebook.html" element={
+            user ? <PlayerLayout><RulebookScreen /></PlayerLayout> : <Navigate to="/login.html" />
           } />
           <Route path="/about" element={
             user ? <PlayerLayout><AboutScreen /></PlayerLayout> : <Navigate to="/login" />
           } />
+          <Route path="/about.html" element={
+            user ? <PlayerLayout><AboutScreen /></PlayerLayout> : <Navigate to="/login.html" />
+          } />
           <Route path="/devs" element={
             user ? <PlayerLayout><DevsScreen /></PlayerLayout> : <Navigate to="/login" />
+          } />
+          <Route path="/devs.html" element={
+            user ? <PlayerLayout><DevsScreen /></PlayerLayout> : <Navigate to="/login.html" />
           } />
 
           {/* Admin Routes */}
           <Route path="/admin" element={
             user && user.role === 'admin' ? <AdminLayout><AdminScreen /></AdminLayout> : <Navigate to="/login" />
+          } />
+          <Route path="/admin.html" element={
+            user && user.role === 'admin' ? <AdminLayout><AdminScreen /></AdminLayout> : <Navigate to="/login.html" />
           } />
 
           {/* Fallback */}

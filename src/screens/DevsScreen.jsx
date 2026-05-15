@@ -12,7 +12,7 @@ const DevCard = ({ name, role, description, photo, hoverPhoto, links }) => {
 
   return (
     <div
-      className="relative w-full max-w-[400px] h-[550px] perspective-1000 group cursor-pointer"
+      className="relative w-full max-w-[700px] h-[750px] perspective-1000 group cursor-pointer"
       onClick={() => setIsFlipped(!isFlipped)}
     >
       <motion.div
@@ -24,13 +24,16 @@ const DevCard = ({ name, role, description, photo, hoverPhoto, links }) => {
         {/* Front Face - Operative Profile */}
         <div className="absolute inset-0 w-full h-full backface-hidden heist-card overflow-hidden group-hover:border-red-600 transition-colors duration-500">
           <div className="scanline-overlay opacity-5"></div>
-          <div className="relative h-2/3 overflow-hidden">
-            <img
-              src={photo}
-              alt={name}
-              className="w-full h-full object-cover filter grayscale group-hover:grayscale-0 transition-all duration-700 scale-105 group-hover:scale-100"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+          <div className="relative h-[80%] overflow-hidden bg-black/40">
+            <div className="absolute inset-0 w-full h-full">
+              <img
+                src={photo}
+                alt={name}
+                className="absolute top-0 left-0 w-full h-[125%] object-cover filter grayscale group-hover:grayscale-0 transition-all duration-700"
+                style={{ transform: 'translateY(-20%)' }}
+              />
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
             <div className="absolute top-6 left-6">
               <div className="heist-badge badge-red shadow-[0_0_15px_rgba(211,47,47,0.4)]">
                 OPERATIVE STATUS: ACTIVE
@@ -38,12 +41,16 @@ const DevCard = ({ name, role, description, photo, hoverPhoto, links }) => {
             </div>
           </div>
 
-          <div className="p-8 h-1/3 flex flex-col justify-start relative z-10">
-            <h3 className="heist-font text-4xl text-white tracking-widest mb-2 uppercase group-hover:text-red-500 transition-colors">{name}</h3>
-            <p className="heist-mono text-red-600 text-[10px] tracking-[0.3em] uppercase font-bold mb-6">{role}</p>
+          <div className="p-8 h-[20%] flex flex-col justify-center relative z-10 border-t border-red-600/20 bg-black/60">
+            <h3 className="heist-font text-5xl text-white tracking-widest mb-1 uppercase group-hover:text-red-500 transition-colors">{name}</h3>
+            <p className="heist-mono text-red-600 text-[11px] tracking-[0.3em] uppercase font-bold mb-4">{role}</p>
             <div className="w-12 h-0.5 bg-red-600/50 group-hover:w-full transition-all duration-500" />
           </div>
         </div>
+
+
+
+
 
         {/* Back Face - Tactical Dossier */}
         <div
@@ -67,8 +74,8 @@ const DevCard = ({ name, role, description, photo, hoverPhoto, links }) => {
 
           <div className="p-8 h-1/2 overflow-y-auto custom-scrollbar relative z-10">
             <div className="flex items-center gap-3 mb-4">
-               <div className="w-1 h-1 bg-red-600 rounded-full"></div>
-               <span className="heist-mono text-[10px] text-red-500 tracking-widest uppercase font-bold">BACKGROUND INTEL</span>
+              <div className="w-1 h-1 bg-red-600 rounded-full"></div>
+              <span className="heist-mono text-[10px] text-red-500 tracking-widest uppercase font-bold">BACKGROUND INTEL</span>
             </div>
             <p className="heist-mono text-gray-400 text-[11px] leading-relaxed tracking-wider uppercase text-justify">
               {description}
@@ -111,33 +118,34 @@ const DevsScreen = () => {
   const devs = [
     {
       name: "Harsh Joshi",
-      role: "Frontend Specialist / UX Engineer",
-      description: "The creative force that brought the industrial aesthetic of the Google Developer Groups to life. Harsh excels in crafting immersive, cinematic user experiences using advanced animation libraries and modern CSS frameworks. His dedication to pixel-perfect design guarantees that every interaction feels premium and impactful.",
+      role: "Lead Full stack engineer / Creative head / architect",
+      description: "The visionary architect behind the Tech TOKENheist, Harsh seamlessly blends high-level system engineering with cutting-edge creative direction. From the immersive cinematic visuals to the robust full-stack architecture, he ensures every byte and pixel serves the ultimate goal: a flawless, premium heist experience.",
       photo: dev1,
       hoverPhoto: admin1,
       links: [
-        { label: "LINKEDIN", url: "#" },
+        { label: "LINKEDIN", url: "https://www.linkedin.com/in/harsh-joshi-29b0743b4" },
         { label: "INSTAGRAM", url: "https://www.instagram.com/hardahmm?igsh=MWhmbmNoZHRiMWY3Mw==" },
         { label: "MAGIC URL", url: "#" }
       ]
     },
     {
       name: "Pratyush Jaiswal",
-      role: "Lead Full Stack Engineer / System Architect",
-      description: "The mastermind behind the core architecture of the Google Developer Groups platform. Pratyush specializes in building high-performance, resilient web applications. With a keen eye for system design and database management, he ensures the platform can handle the intense load of a live combat tournament without breaking a sweat.",
+      role: "Backend master / UX Engineer / architect",
+      description: "A true titan of the backend, Pratyush architects the complex real-time infrastructure that powers the tournament's live engine. By masterfully balancing high-performance system logic with intuitive UX principles, he bridges the gap between raw data and fluid interaction, making sure the heist remains stable even under extreme tactical pressure.",
       photo: prat,
       hoverPhoto: admin2,
       links: [
-        { label: "LINKEDIN", url: "#" },
+        { label: "LINKEDIN", url: "https://www.linkedin.com/in/pratyush-jaiswal-ba0b6926a/" },
         { label: "INSTAGRAM", url: "https://www.instagram.com/been__there_done_that?igsh=bzRybHl3a2VxbzZo" },
         { label: "MAGIC URL", url: "#" }
       ]
     }
   ];
 
+
   return (
     <motion.div className="text-white relative flex flex-col gap-12 h-full pb-20" variants={containerVariants} initial="hidden" animate="visible">
-      
+
       {/* TACTICAL HEADER */}
       <motion.div variants={itemVariants} className="heist-header-tactical mb-12">
         <div>
@@ -164,7 +172,7 @@ const DevsScreen = () => {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full pointer-events-none -z-10 opacity-[0.02]">
         <div className="blueprint-grid w-full h-full"></div>
       </div>
-      
+
       <div className="fixed bottom-0 right-0 p-12 opacity-5 pointer-events-none hidden lg:block">
         <h2 className="heist-font text-[18rem] leading-none select-none tracking-tighter">HEIST</h2>
       </div>

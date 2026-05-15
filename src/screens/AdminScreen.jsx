@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useGameState } from '../hooks/useGameState';
 import {
   VenetianMask, Banknote, Lock, Bomb, Users, Search, Flame, Settings,
-  Plus, X, Fingerprint, Wallet, Map, ScrollText, Crown, Zap, AlertTriangle, Clock
+  Plus, X, Fingerprint, Wallet, Map, ScrollText, Crown, Zap, AlertTriangle, Clock,
+  Skull, Trophy, Swords
 } from 'lucide-react';
 import DomainWheel from '../components/DomainWheel';
 import { buildQueueDiagnostics } from '../utils/matchmaking';
@@ -49,7 +50,9 @@ const AdminScreen = () => {
     notifications, queuePairs, matchConstraints,
     startGame, stopGame, resetGame, togglePhase, createTeam, deleteTeam,
     updateTokens, createMatch, declareWinner, spinDomain, updateDomains, setTimeoutDuration,
-    enrollAllEligible, autoMatchPairs
+    enrollAllEligible, autoMatchPairs,
+    endMatchAndStartFinale, setFinaleDomain,
+    declareFinaleRoundWinner, endFinale
   } = useGameState();
 
   // Matchmaking is now handled globally by useGameSocketBridge (3s interval)
@@ -64,13 +67,37 @@ const AdminScreen = () => {
   const [memberNames, setMemberNames] = useState([]);
   const [leader, setLeader] = useState('');
 
+  const [actionInProgress, setActionInProgress] = useState(null); // track which action is running
+
+  const safeAction = async (name, fn) => {
+    if (actionInProgress) return; // prevent double-click
+    setActionInProgress(name);
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`Action ${name} failed:`, err);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
   const [logFilter, setLogFilter] = useState('all'); // 'all', 'matches', 'admin'
 
   const [domainInput, setDomainInput] = useState('');
   const [timeoutInput, setTimeoutInput] = useState('');
+  const [selectedFinaleDomain, setSelectedFinaleDomain] = useState('');
 
   const domains = gameState.domains || ['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition'];
   const assignedProfiles = useMemo(() => new Set((teams || []).map((team) => team.name)), [teams]);
+  const finaleDomains = gameState.finaleState?.finaleDomains || [];
+  const currentFinaleDomain = gameState.finaleState?.currentDomain || '';
+  const finaleRound = (gameState.finaleState?.currentRound || 0) + 1;
+  const finaleActive = Boolean(gameState.finaleState?.isFinaleActive);
+  const roundStartedAt = gameState.finaleState?.roundStartedAt || null;
+  const availableFinaleDomains = useMemo(() => {
+    const used = new Set([...(finaleDomains || []), gameState.finaleState?.currentDomain].filter(Boolean));
+    return domains.filter((domain) => !used.has(domain));
+  }, [domains, finaleDomains, gameState.finaleState?.currentDomain]);
 
   const addMember = () => {
     const trimmed = memberInput.trim();
@@ -90,9 +117,11 @@ const AdminScreen = () => {
     e.preventDefault();
     const isCustom = selectedProfile === CUSTOM_PROFILE_VALUE;
     const teamName = isCustom ? customTeamName.trim() : selectedProfile;
-    const profileAlreadyAssigned = !isCustom && assignedProfiles.has(selectedProfile);
 
-    if (!teamName || !teamPassword || memberNames.length < 1 || !leader || profileAlreadyAssigned) return;
+    if (!teamName) { alert('Missing team name/profile'); return; }
+    if (!teamPassword) { alert('Missing security key (password)'); return; }
+    if (memberNames.length < 1) { alert('Add at least one member'); return; }
+    if (!leader) { alert('Select a crew leader from the dropdown'); return; }
 
     createTeam({ name: teamName, memberNames, leader, password: teamPassword });
     setTeamPassword('');
@@ -138,6 +167,7 @@ const AdminScreen = () => {
     { id: 'ranking', label: 'RANKING', icon: <Crown size={20} /> },
     { id: 'queue', label: 'PLANS', icon: <Search size={20} /> },
     { id: 'fighting', label: 'VAULTS', icon: <Flame size={20} /> },
+    { id: 'finale', label: 'FINALE', icon: <Trophy size={20} /> },
     { id: 'logs', label: 'LOGS', icon: <ScrollText size={20} /> },
     { id: 'settings', label: 'SCHEMATICS', icon: <Settings size={20} /> },
   ];
@@ -155,6 +185,21 @@ const AdminScreen = () => {
     if (logFilter === 'admin') return notifications.filter(n => n.message.includes('Admin') || n.message.includes('System') || n.message.includes('Command'));
     return notifications;
   }, [notifications, logFilter]);
+
+  const telemetryLogs = useMemo(() => {
+    return [...notifications].reverse();
+  }, [notifications]);
+
+  useEffect(() => {
+    if (currentFinaleDomain) {
+      setSelectedFinaleDomain('');
+      return;
+    }
+    if (!selectedFinaleDomain) return;
+    if (!availableFinaleDomains.includes(selectedFinaleDomain)) {
+      setSelectedFinaleDomain('');
+    }
+  }, [selectedFinaleDomain, availableFinaleDomains, currentFinaleDomain]);
 
   return (
     <div className="min-h-screen heist-bg p-4 sm:p-6 lg:p-8 text-white relative flex flex-col gap-3 pb-20 overflow-hidden">
@@ -181,10 +226,11 @@ const AdminScreen = () => {
             <Banknote className="text-heist-teal" size={20} />
           </div>
           <button
-            className="border border-heist-red text-heist-red px-4 py-2 heist-font text-lg md:text-xl tracking-widest hover:bg-heist-red hover:text-black transition-colors flex-1 md:flex-none"
-            onClick={() => { if (window.confirm('Abort mission? This deletes ALL data.')) resetGame(); }}
+            className={`border border-heist-red text-heist-red px-4 py-2 heist-font text-lg md:text-xl tracking-widest hover:bg-heist-red hover:text-black transition-colors flex-1 md:flex-none ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
+            onClick={() => safeAction('abortMission', resetGame)}
+            disabled={!!actionInProgress}
           >
-            ABORT MISSION
+            {actionInProgress === 'abortMission' ? 'ABORTING...' : 'ABORT MISSION'}
           </button>
         </div>
       </div>
@@ -203,27 +249,37 @@ const AdminScreen = () => {
         <div className="flex flex-col items-center xl:items-end gap-3 w-full xl:w-auto">
           <div className="flex flex-wrap justify-center xl:justify-end gap-2 w-full">
             <button
-              className={`px-6 py-2 heist-font text-xl tracking-wider min-w-[120px] transition-colors ${gameState.isPaused || !gameState.isGameActive ? 'bg-heist-red text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
-              onClick={stopGame}
+              className={`px-6 py-2 heist-font text-xl tracking-wider min-w-[120px] transition-colors ${gameState.isPaused || !gameState.isGameActive ? 'bg-heist-red text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'} ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
+              onClick={() => safeAction('stopGame', stopGame)}
+              disabled={!!actionInProgress}
             >
-              ON HOLD
+              {actionInProgress === 'stopGame' ? 'HOLDING...' : 'ON HOLD'}
             </button>
             <button className="px-6 py-2 bg-heist-teal text-black heist-font text-xl tracking-wider flex items-center gap-2 min-w-[120px]">
               PHASE {gameState.phase === 'phase2' ? '2' : '1'} <Banknote size={20} />
             </button>
             <button
-              className={`px-6 py-2 heist-font text-xl tracking-wider flex items-center gap-2 min-w-[160px] transition-colors ${gameState.isGameActive && !gameState.isPaused ? 'bg-heist-yellow text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
-              onClick={startGame}
+              className={`px-6 py-2 heist-font text-xl tracking-wider flex items-center gap-2 min-w-[160px] transition-colors ${gameState.isGameActive && !gameState.isPaused ? 'bg-heist-yellow text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'} ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
+              onClick={() => safeAction('startGame', startGame)}
+              disabled={!!actionInProgress}
             >
-              EXECUTE PLAN <Lock size={20} />
+              {actionInProgress === 'startGame' ? 'EXECUTING...' : 'EXECUTE PLAN'} <Lock size={20} />
             </button>
           </div>
           <div className="flex gap-2 relative mt-2 xl:mt-0">
             <button
-              className="border border-heist-red text-heist-red px-6 py-1 heist-font text-lg hover:bg-heist-red hover:text-black transition-colors"
-              onClick={() => { if (window.confirm('Reset?')) resetGame(); }}
+              className={`border border-heist-red text-heist-red px-6 py-1 heist-font text-lg hover:bg-heist-red hover:text-black transition-colors ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
+              onClick={() => safeAction('resetGame', resetGame)}
+              disabled={!!actionInProgress}
             >
-              RESET PARAMETERS
+              {actionInProgress === 'resetGame' ? 'RESETTING...' : 'RESET PARAMETERS'}
+            </button>
+            <button
+              className={`border-2 border-orange-500 text-orange-500 px-6 py-1 heist-font text-lg hover:bg-orange-500 hover:text-black transition-colors animate-pulse ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
+              onClick={() => safeAction('endMatch', () => endMatchAndStartFinale())}
+              disabled={!!actionInProgress}
+            >
+              <span className="flex items-center gap-2"><Skull size={18} /> {actionInProgress === 'endMatch' ? 'ENDING...' : 'END MATCH'}</span>
             </button>
             <span className="absolute -bottom-3 -right-2 bg-heist-red text-black text-[10px] heist-font px-1 transform rotate-6 border border-black shadow-sm flex items-center gap-1">
               <AlertTriangle size={10} /> CONFIRM!
@@ -253,10 +309,11 @@ const AdminScreen = () => {
           </div>
         </div>
         <button
-          className="bg-heist-teal text-black px-6 py-2 heist-font text-xl flex items-center justify-center gap-2 hover:bg-white transition-colors w-full md:w-auto flex-shrink-0"
-          onClick={togglePhase}
+          className={`bg-heist-teal text-black px-6 py-2 heist-font text-xl flex items-center justify-center gap-2 hover:bg-white transition-colors w-full md:w-auto flex-shrink-0 ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
+          onClick={() => safeAction('togglePhase', togglePhase)}
+          disabled={!!actionInProgress}
         >
-          {gameState.phase === 'phase2' ? 'REVERT PHASE' : 'INITIATE PHASE 2'} <Bomb size={20} />
+          {actionInProgress === 'togglePhase' ? 'SWITCHING...' : (gameState.phase === 'phase2' ? 'REVERT PHASE' : 'INITIATE PHASE 2')} <Bomb size={20} />
         </button>
       </div>
 
@@ -363,7 +420,10 @@ const AdminScreen = () => {
                     <span>Selected: <span className="text-white">{selectedProfileLabel}</span></span>
                   </div>
                 </div>
-                <button type="submit" className="mt-4 bg-[#bbb] text-black py-3 heist-font text-xl tracking-wider flex items-center justify-center gap-2 hover:bg-white transition-colors disabled:opacity-50" disabled={(selectedProfile === CUSTOM_PROFILE_VALUE ? !customTeamName.trim() : !selectedProfile || assignedProfiles.has(selectedProfile)) || !teamPassword || memberNames.length < 1 || !leader}>
+                <button 
+                  type="submit" 
+                  className="mt-4 bg-[#bbb] text-black py-3 heist-font text-xl tracking-wider flex items-center justify-center gap-2 hover:bg-white transition-colors"
+                >
                   + CREATE TEAM <Wallet size={20} />
                 </button>
               </form>
@@ -387,7 +447,7 @@ const AdminScreen = () => {
                           <img src={t.avatarSrc} alt={getProfileLabel(t.name)} className="w-full h-full object-cover" />
                         </div>
                         <span className={`heist-font text-2xl tracking-wider ${t.status === 'eliminated' ? 'text-heist-red line-through' : t.status === 'timeout' ? 'text-gray-500' : 'text-white'}`}>{t.name}</span>
-                        <span className={`heist-mono text-[10px] px-1 py-0.5 border ${t.status === 'eliminated' ? 'border-heist-red text-heist-red' : t.status === 'idle' ? 'border-heist-yellow text-heist-yellow' : t.status === 'fighting' ? 'border-heist-red bg-heist-red text-white' : 'border-gray-500 text-gray-400'}`}>
+                        <span className={`heist-mono text-[10px] px-1 py-0.5 border ${t.status === 'eliminated' ? 'border-heist-red text-heist-red' : t.status === 'finalist' ? 'border-orange-500 text-orange-500' : t.status === 'spectating' ? 'border-gray-500 text-gray-300' : t.status === 'idle' ? 'border-heist-yellow text-heist-yellow' : t.status === 'fighting' ? 'border-heist-red bg-heist-red text-white' : 'border-gray-500 text-gray-400'}`}>
                           {t.status.toUpperCase()}
                         </span>
                         {t.status === 'timeout' && t.timeoutUntil && <TimeoutDisplay timeoutUntil={t.timeoutUntil} />}
@@ -482,6 +542,51 @@ const AdminScreen = () => {
             <h3 className="heist-font text-heist-red text-3xl mb-6 tracking-wider">ACTIVE MISSIONS ({activeMatches.length})</h3>
 
             <div className="flex-1 overflow-y-auto pr-2 pb-10">
+              {finaleActive && (
+                <div className="border-2 border-orange-500 bg-black bg-opacity-80 p-4 mb-6">
+                  <div className="flex items-center justify-between border-b border-orange-500/40 pb-3 mb-4">
+                    <div className="heist-font text-orange-500 text-2xl tracking-widest">FINALE VAULT</div>
+                    <div className="heist-mono text-[10px] uppercase tracking-widest text-gray-500">ROUND {finaleRound} OF 5</div>
+                  </div>
+
+                  {currentFinaleDomain ? (
+                    <>
+                      <div className="flex items-center justify-between gap-4 mb-4">
+                        <div>
+                          <div className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">DOMAIN</div>
+                          <div className="heist-font text-orange-500 text-3xl tracking-widest">{currentFinaleDomain}</div>
+                        </div>
+                        {roundStartedAt && (
+                          <div className="flex items-center gap-2">
+                            <Clock className="text-gray-400" size={16} />
+                            <MatchTimer startTime={roundStartedAt} />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button
+                          className="border-2 border-heist-red text-heist-red p-5 heist-font text-2xl hover:bg-heist-red hover:text-white transition-colors"
+                          onClick={() => { if (window.confirm(`Declare ${gameState.finaleState?.teamAName} winner of this round?`)) declareFinaleRoundWinner('a'); }}
+                        >
+                          {gameState.finaleState?.teamAName} WINS
+                        </button>
+                        <button
+                          className="border-2 border-heist-teal text-heist-teal p-5 heist-font text-2xl hover:bg-heist-teal hover:text-black transition-colors"
+                          onClick={() => { if (window.confirm(`Declare ${gameState.finaleState?.teamBName} winner of this round?`)) declareFinaleRoundWinner('b'); }}
+                        >
+                          {gameState.finaleState?.teamBName} WINS
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="heist-mono text-gray-500 text-sm">
+                      Awaiting domain selection in Finale Control.
+                    </div>
+                  )}
+                </div>
+              )}
+
               {activeMatches.length === 0 && <div className="heist-mono text-gray-500">No operations currently active.</div>}
 
               <div className="flex flex-col gap-6">
@@ -568,35 +673,209 @@ const AdminScreen = () => {
                 {sortedLeaderboard.map((t, idx) => {
                   const isEliminated = t.status === 'eliminated';
                   return (
-                  <div key={t.id} className={`border border-gray-700 bg-black bg-opacity-80 p-4 flex items-center justify-between transition-colors ${isEliminated ? 'opacity-50 grayscale' : 'hover:border-heist-yellow'}`}>
-                    <div className="flex items-center gap-6">
-                      <span className={`heist-font text-4xl w-12 text-center ${isEliminated ? 'text-gray-800' : idx < 3 ? 'text-heist-yellow' : 'text-gray-600'}`}>
-                        {String(idx + 1).padStart(2, '0')}
-                      </span>
-                      <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-700 bg-black flex-shrink-0">
-                        <img src={t.avatarSrc} alt={t.name} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className={`heist-font text-3xl tracking-widest uppercase ${isEliminated ? 'text-heist-red line-through' : 'text-white'}`}>{t.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">Operator: {t.leader}</span>
-                          {isEliminated && (
-                            <span className="heist-mono text-[8px] uppercase tracking-widest text-heist-red border border-heist-red px-1.5 py-0.5 bg-red-950">
-                              ELIMINATED
-                            </span>
-                          )}
+                    <div key={t.id} className={`border border-gray-700 bg-black bg-opacity-80 p-4 flex items-center justify-between transition-colors ${isEliminated ? 'opacity-50 grayscale' : 'hover:border-heist-yellow'}`}>
+                      <div className="flex items-center gap-6">
+                        <span className={`heist-font text-4xl w-12 text-center ${isEliminated ? 'text-gray-800' : idx < 3 ? 'text-heist-yellow' : 'text-gray-600'}`}>
+                          {String(idx + 1).padStart(2, '0')}
+                        </span>
+                        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-700 bg-black flex-shrink-0">
+                          <img src={t.avatarSrc} alt={t.name} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className={`heist-font text-3xl tracking-widest uppercase ${isEliminated ? 'text-heist-red line-through' : 'text-white'}`}>{t.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">Operator: {t.leader}</span>
+                            {isEliminated && (
+                              <span className="heist-mono text-[8px] uppercase tracking-widest text-heist-red border border-heist-red px-1.5 py-0.5 bg-red-950">
+                                ELIMINATED
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
+                      <div className="flex flex-col items-end">
+                        <span className={`heist-font text-4xl tracking-widest ${isEliminated ? 'text-gray-800' : 'text-heist-yellow'}`}>{t.tokens}</span>
+                        <span className="heist-mono text-[10px] text-gray-600 uppercase tracking-widest">TOKENS</span>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end">
-                      <span className={`heist-font text-4xl tracking-widest ${isEliminated ? 'text-gray-800' : 'text-heist-yellow'}`}>{t.tokens}</span>
-                      <span className="heist-mono text-[10px] text-gray-600 uppercase tracking-widest">TOKENS</span>
-                    </div>
-                  </div>
                   );
                 })}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* FINALE TAB */}
+        {tab === 'finale' && (
+          <div className="panel-container border-2 border-orange-500 p-6 h-full flex flex-col bg-blueprint">
+            <h3 className="heist-font text-orange-500 text-3xl mb-6 tracking-wider flex items-center gap-3">
+              <Trophy size={28} /> FINALE CONTROL CENTER
+            </h3>
+
+            {!gameState.finaleState?.isFinaleActive ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-6">
+                <Skull className="text-gray-600" size={80} />
+                <div className="heist-font text-gray-400 text-4xl tracking-widest text-center">NO FINALE ACTIVE</div>
+                <div className="heist-mono text-gray-500 text-sm text-center max-w-lg leading-relaxed">
+                  Use the <span className="text-orange-500 font-bold">END MATCH</span> button in the Operation Command panel above to lock all teams and start the finale between the top 2 leaderboard teams.
+                </div>
+                <button
+                  className="border-2 border-orange-500 text-orange-500 px-8 py-3 heist-font text-2xl hover:bg-orange-500 hover:text-black transition-colors mt-4 flex items-center gap-3"
+                  onClick={() => { if (window.confirm('END MATCH and start FINALE?')) endMatchAndStartFinale(); }}
+                >
+                  <Skull size={24} /> INITIATE FINALE
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto pr-2 pb-10">
+                {/* Finale Status Header */}
+                <div className="border-2 border-orange-500 bg-black bg-opacity-80 p-6 mb-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="heist-font text-orange-500 text-2xl tracking-widest">LIVE FINALE</div>
+                    <div className="heist-mono text-xs border border-orange-500 text-orange-500 px-2 py-1 animate-pulse">
+                      ROUND {(gameState.finaleState.currentRound || 0) + 1} OF 5
+                    </div>
+                  </div>
+
+                  {/* Matchup Display */}
+                  <div className="grid grid-cols-[1fr_auto_1fr] gap-6 items-center py-6">
+                    <div className="flex flex-col items-center text-center gap-2">
+                      <span className="heist-font text-3xl text-white">{gameState.finaleState.teamAName}</span>
+                      <span className="heist-font text-5xl text-heist-red">{gameState.finaleState.winsA || 0}</span>
+                      <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">WINS</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center">
+                      <Swords className="text-orange-500" size={40} />
+                      <span className="heist-font text-orange-500 text-2xl mt-2">VS</span>
+                    </div>
+                    <div className="flex flex-col items-center text-center gap-2">
+                      <span className="heist-font text-3xl text-white">{gameState.finaleState.teamBName}</span>
+                      <span className="heist-font text-5xl text-heist-teal">{gameState.finaleState.winsB || 0}</span>
+                      <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">WINS</span>
+                    </div>
+                  </div>
+
+                  {/* Round Tracker */}
+                  <div className="flex items-center justify-center gap-3 mt-4">
+                    {Array.from({ length: 5 }, (_, i) => {
+                      const result = (gameState.finaleState.finaleResults || [])[i];
+                      return (
+                        <div key={i} className={`w-8 h-8 border-2 flex items-center justify-center heist-font text-lg ${result === 'a' ? 'border-heist-red bg-heist-red bg-opacity-20 text-heist-red' :
+                          result === 'b' ? 'border-heist-teal bg-heist-teal bg-opacity-20 text-heist-teal' :
+                            i === (gameState.finaleState.currentRound || 0) ? 'border-orange-500 text-orange-500 animate-pulse' :
+                              'border-gray-700 text-gray-700'
+                          }`}>
+                          {result === 'a' ? 'A' : result === 'b' ? 'B' : (i + 1)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Domain Selector — Only show if no winner yet and round < 5 */}
+                {!gameState.finaleState.finaleWinner && (gameState.finaleState.currentRound || 0) < 5 && (
+                  <div className="border border-gray-700 bg-black bg-opacity-80 p-6 mb-6">
+                    <h4 className="heist-font text-heist-yellow text-2xl mb-4 tracking-wider">
+                      SELECT DOMAIN — ROUND {finaleRound}
+                    </h4>
+                    <div className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest mb-4">
+                      USED DOMAINS: {finaleDomains.length > 0 ? finaleDomains.join(', ') : 'NONE'}
+                    </div>
+                    {currentFinaleDomain ? (
+                      <div className="text-center py-4">
+                        <div className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest mb-2">CURRENT DOMAIN</div>
+                        <div className="heist-font text-orange-500 text-4xl tracking-widest">{currentFinaleDomain}</div>
+                        {roundStartedAt && (
+                          <div className="flex items-center justify-center gap-3 mt-4">
+                            <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">ROUND TIMER</span>
+                            <MatchTimer startTime={roundStartedAt} />
+                          </div>
+                        )}
+                        <div className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest mt-4">
+                          DECLARE WINNER IN VAULTS
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {availableFinaleDomains.length === 0 ? (
+                          <div className="heist-mono text-gray-500 text-sm text-center py-6">
+                            All domains have been used. Update domains in Schematics if you need more options.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {availableFinaleDomains.map(d => (
+                              <button
+                                key={d}
+                                className={`border p-4 heist-font text-xl tracking-wider transition-colors ${selectedFinaleDomain === d
+                                  ? 'border-orange-500 bg-orange-500 bg-opacity-20 text-orange-500'
+                                  : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+                                  }`}
+                                onClick={() => setSelectedFinaleDomain(d)}
+                              >
+                                {d}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {selectedFinaleDomain && (
+                          <button
+                            className="mt-4 w-full bg-orange-500 text-black py-3 heist-font text-xl tracking-wider hover:bg-orange-400 transition-colors"
+                            onClick={() => { setFinaleDomain(selectedFinaleDomain); setSelectedFinaleDomain(''); }}
+                          >
+                            LOCK DOMAIN: {selectedFinaleDomain}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Winner Declaration — Only show if domain is set */}
+                {!gameState.finaleState.finaleWinner && gameState.finaleState.currentDomain && (
+                  <div className="border-2 border-heist-red bg-black bg-opacity-80 p-6 mb-6">
+                    <h4 className="heist-font text-heist-red text-2xl mb-4 tracking-wider">DECLARE ROUND WINNER</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        className="border-2 border-heist-red text-heist-red p-6 heist-font text-2xl hover:bg-heist-red hover:text-white transition-colors flex flex-col items-center gap-2"
+                        onClick={() => { if (window.confirm(`Declare ${gameState.finaleState.teamAName} winner of this round?`)) declareFinaleRoundWinner('a'); }}
+                      >
+                        <Crown size={32} />
+                        {gameState.finaleState.teamAName} WINS
+                      </button>
+                      <button
+                        className="border-2 border-heist-teal text-heist-teal p-6 heist-font text-2xl hover:bg-heist-teal hover:text-black transition-colors flex flex-col items-center gap-2"
+                        onClick={() => { if (window.confirm(`Declare ${gameState.finaleState.teamBName} winner of this round?`)) declareFinaleRoundWinner('b'); }}
+                      >
+                        <Crown size={32} />
+                        {gameState.finaleState.teamBName} WINS
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Victory State */}
+                {gameState.finaleState.finaleWinner && (
+                  <div className="border-2 border-heist-yellow bg-black bg-opacity-80 p-8 text-center">
+                    <Crown className="text-heist-yellow mx-auto mb-4" size={64} />
+                    <div className="heist-font text-heist-yellow text-5xl tracking-widest mb-2">CHAMPION</div>
+                    <div className="heist-font text-white text-4xl tracking-widest mb-4">
+                      {gameState.finaleState.finaleWinner === 'a' ? gameState.finaleState.teamAName : gameState.finaleState.teamBName}
+                    </div>
+                    <div className="heist-font text-3xl mb-6">
+                      <span className="text-heist-red">{gameState.finaleState.winsA}</span>
+                      <span className="text-gray-600 mx-2">—</span>
+                      <span className="text-heist-teal">{gameState.finaleState.winsB}</span>
+                    </div>
+                    <button
+                      className="border border-gray-600 text-gray-400 px-6 py-2 heist-font text-lg hover:bg-gray-800 transition-colors"
+                      onClick={() => { if (window.confirm('End finale and unlock all teams?')) endFinale(); }}
+                    >
+                      END FINALE & UNLOCK TEAMS
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -629,18 +908,15 @@ const AdminScreen = () => {
             <div className="panel-container border-2 border-heist-red p-6 flex flex-col bg-blueprint">
               <h3 className="heist-font text-heist-red text-3xl mb-6 tracking-wider">TELEMETRY LOGS</h3>
               <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-2 custom-scrollbar">
-                {[...matchHistory].reverse().map((h, i) => (
-                  <div key={h.id || i} className="border-l-2 border-heist-red bg-black bg-opacity-60 p-3 hover:bg-opacity-80 transition-all">
+                {telemetryLogs.map((entry, i) => (
+                  <div key={`${entry.time || 'telemetry'}-${i}`} className="border-l-2 border-heist-red bg-black bg-opacity-60 p-3 hover:bg-opacity-80 transition-all">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="heist-mono text-[10px] text-red-500 uppercase font-bold tracking-widest">{h.domain}</span>
-                      <span className="heist-mono text-[10px] text-gray-500 uppercase">{h.timestamp}</span>
+                      <span className="heist-mono text-[10px] text-red-500 uppercase font-bold tracking-widest">EVENT</span>
+                      <span className="heist-mono text-[10px] text-gray-500 uppercase">{entry.time || entry.timestamp || entry.created_at}</span>
                     </div>
                     <div className="heist-mono text-xs tracking-widest uppercase flex items-center gap-2">
-                      <span className="text-white">{h.winner}</span>
-                      <span className="text-heist-red">// NEUTRALIZED //</span>
-                      <span className="text-gray-400">{h.loser}</span>
+                      <span className="text-white">{entry.message}</span>
                     </div>
-                    {h.isWager && <div className="mt-2 heist-mono text-[8px] text-heist-teal border border-heist-teal w-fit px-1">WAGER MATCH</div>}
                   </div>
                 ))}
               </div>
