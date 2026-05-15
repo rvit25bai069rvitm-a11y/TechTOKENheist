@@ -208,11 +208,29 @@ const useGameStateStore = create(
                 clearTimeout(timeoutId)
 
                 if (error) {
+                  let errorMessage = error.message;
+                  
+                  // Extract detailed error from response body if possible
+                  if (error.context && typeof error.context.json === 'function') {
+                    try {
+                      const body = await error.context.json();
+                      if (body && (body.error || body.message)) {
+                        errorMessage = body.error || body.message;
+                      }
+                    } catch (e) {
+                      // If JSON parsing fails, try text
+                      try {
+                        const text = await error.context.text();
+                        if (text && text.length < 200) errorMessage = text;
+                      } catch (e2) {}
+                    }
+                  }
+
                   // Enhanced logging for Vercel/Production
                   console.group(`[ADMIN ACTION ERROR] ${act}`);
                   console.error('Status:', error.status);
-                  console.error('Message:', error.message);
-                  console.error('Context:', error.context);
+                  console.error('Message:', errorMessage);
+                  console.error('Original Error:', error);
                   console.groupEnd();
 
                   // Check if it's a retryable error (network, 5xx)
@@ -221,12 +239,12 @@ const useGameStateStore = create(
                     error.message?.includes('fetch') ||
                     error.status >= 500
                   if (isRetryable && attempt === 0) {
-                    console.warn(`[${act}] Retryable error, attempt ${attempt + 1}:`, error.message)
+                    console.warn(`[${act}] Retryable error, attempt ${attempt + 1}:`, errorMessage)
                     lastError = error
                     await new Promise(r => setTimeout(r, 1000)) // Wait 1s before retry
                     continue
                   }
-                  return { success: false, error: `${error.message}${error.status ? ` (Status: ${error.status})` : ''}` }
+                  return { success: false, error: `${errorMessage}${error.status ? ` (Status: ${error.status})` : ''}` }
                 }
 
                 if (data && !data.success) {
