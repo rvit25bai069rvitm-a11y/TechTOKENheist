@@ -52,12 +52,30 @@ const AdminScreen = () => {
     updateTokens, createMatch, declareWinner, spinDomain, updateDomains, setTimeoutDuration,
     enrollAllEligible, autoMatchPairs,
     endMatchAndStartFinale, setFinaleDomain,
-    declareFinaleRoundWinner, endFinale
+    declareFinaleRoundWinner, endFinale,
+    triggerFetchPublicState,
+    _invoke
   } = useGameState();
 
-  // Matchmaking is now handled globally by useGameSocketBridge (3s interval)
-  // No need to trigger autoMatchPairs from AdminScreen anymore
+  const [diagResult, setDiagResult] = useState(null);
 
+  const runDiagnostics = async () => {
+    setActionInProgress('diag');
+    setDiagResult('Testing connection...');
+    try {
+      const res = await _invoke('healthCheck');
+      if (res.success) {
+        setDiagResult(`CONNECTED: System is ${res.data?.systemStatus || 'ACTIVE'}`);
+      } else {
+        setDiagResult(`FAILED: ${res.error}`);
+      }
+    } catch (err) {
+      setDiagResult(`CRITICAL ERROR: ${err.message}`);
+    } finally {
+      setActionInProgress(null);
+      setTimeout(() => setDiagResult(null), 5000);
+    }
+  };
 
   const [tab, setTab] = useState('teams');
   const [selectedProfile, setSelectedProfile] = useState(() => PROFILE_AVATARS[0]?.name || '');
@@ -113,6 +131,8 @@ const AdminScreen = () => {
     if (leader === removedName) setLeader('');
   };
 
+  const [confirmConfig, setConfirmConfig] = useState(null);
+
   const handleCreateTeam = (e) => {
     e.preventDefault();
     const isCustom = selectedProfile === CUSTOM_PROFILE_VALUE;
@@ -123,7 +143,7 @@ const AdminScreen = () => {
     if (memberNames.length < 1) { alert('Add at least one member'); return; }
     if (!leader) { alert('Select a crew leader from the dropdown'); return; }
 
-    createTeam({ name: teamName, memberNames, leader, password: teamPassword });
+    safeAction('createTeam', () => createTeam({ name: teamName, memberNames, leader, password: teamPassword }));
     setTeamPassword('');
     setCustomTeamName('');
     setMemberInput('');
@@ -227,7 +247,12 @@ const AdminScreen = () => {
           </div>
           <button
             className={`border border-heist-red text-heist-red px-4 py-2 heist-font text-lg md:text-xl tracking-widest hover:bg-heist-red hover:text-black transition-colors flex-1 md:flex-none ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
-            onClick={() => safeAction('abortMission', resetGame)}
+            onClick={() => setConfirmConfig({
+              title: 'ABORT MISSION',
+              message: 'This will wipe all active matches and reset the operation. Are you sure?',
+              type: 'danger',
+              onConfirm: () => safeAction('abortMission', resetGame)
+            })}
             disabled={!!actionInProgress}
           >
             {actionInProgress === 'abortMission' ? 'ABORTING...' : 'ABORT MISSION'}
@@ -250,7 +275,12 @@ const AdminScreen = () => {
           <div className="flex flex-wrap justify-center xl:justify-end gap-2 w-full">
             <button
               className={`px-6 py-2 heist-font text-xl tracking-wider min-w-[120px] transition-colors ${gameState.isPaused || !gameState.isGameActive ? 'bg-heist-red text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'} ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
-              onClick={() => safeAction('stopGame', stopGame)}
+              onClick={() => setConfirmConfig({
+                title: 'HOLD MISSION',
+                message: 'This will pause all active operations and timers. Proceed?',
+                type: 'warning',
+                onConfirm: () => safeAction('stopGame', stopGame)
+              })}
               disabled={!!actionInProgress}
             >
               {actionInProgress === 'stopGame' ? 'HOLDING...' : 'ON HOLD'}
@@ -260,7 +290,12 @@ const AdminScreen = () => {
             </button>
             <button
               className={`px-6 py-2 heist-font text-xl tracking-wider flex items-center gap-2 min-w-[160px] transition-colors ${gameState.isGameActive && !gameState.isPaused ? 'bg-heist-yellow text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'} ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
-              onClick={() => safeAction('startGame', startGame)}
+              onClick={() => setConfirmConfig({
+                title: 'EXECUTE PLAN',
+                message: 'Initiate mission and activate all field operations?',
+                type: 'success',
+                onConfirm: () => safeAction('startGame', startGame)
+              })}
               disabled={!!actionInProgress}
             >
               {actionInProgress === 'startGame' ? 'EXECUTING...' : 'EXECUTE PLAN'} <Lock size={20} />
@@ -269,14 +304,24 @@ const AdminScreen = () => {
           <div className="flex gap-2 relative mt-2 xl:mt-0">
             <button
               className={`border border-heist-red text-heist-red px-6 py-1 heist-font text-lg hover:bg-heist-red hover:text-black transition-colors ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
-              onClick={() => safeAction('resetGame', resetGame)}
+              onClick={() => setConfirmConfig({
+                title: 'RESET PARAMETERS',
+                message: 'This will reset all team tokens and status. This action is irreversible!',
+                type: 'danger',
+                onConfirm: () => safeAction('resetGame', resetGame)
+              })}
               disabled={!!actionInProgress}
             >
               {actionInProgress === 'resetGame' ? 'RESETTING...' : 'RESET PARAMETERS'}
             </button>
             <button
               className={`border-2 border-orange-500 text-orange-500 px-6 py-1 heist-font text-lg hover:bg-orange-500 hover:text-black transition-colors animate-pulse ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
-              onClick={() => safeAction('endMatch', () => endMatchAndStartFinale())}
+              onClick={() => setConfirmConfig({
+                title: 'END MATCH & START FINALE',
+                message: 'This will terminate all ongoing matches and lock the leaderboard for the Finale. Proceed?',
+                type: 'danger',
+                onConfirm: () => safeAction('endMatch', endMatchAndStartFinale)
+              })}
               disabled={!!actionInProgress}
             >
               <span className="flex items-center gap-2"><Skull size={18} /> {actionInProgress === 'endMatch' ? 'ENDING...' : 'END MATCH'}</span>
@@ -310,7 +355,12 @@ const AdminScreen = () => {
         </div>
         <button
           className={`bg-heist-teal text-black px-6 py-2 heist-font text-xl flex items-center justify-center gap-2 hover:bg-white transition-colors w-full md:w-auto flex-shrink-0 ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
-          onClick={() => safeAction('togglePhase', togglePhase)}
+          onClick={() => setConfirmConfig({
+            title: gameState.phase === 'phase2' ? 'REVERT TO PHASE 1' : 'INITIATE PHASE 2',
+            message: gameState.phase === 'phase2' ? 'Switch back to standard match mode?' : 'Switch to WAGER mode? This will reset match history and enable high-stakes eliminations.',
+            type: 'warning',
+            onConfirm: () => safeAction('togglePhase', togglePhase)
+          })}
           disabled={!!actionInProgress}
         >
           {actionInProgress === 'togglePhase' ? 'SWITCHING...' : (gameState.phase === 'phase2' ? 'REVERT PHASE' : 'INITIATE PHASE 2')} <Bomb size={20} />
@@ -1006,6 +1056,85 @@ const AdminScreen = () => {
             <Crown className="text-heist-yellow" size={24} />
             <span className="heist-font text-3xl md:text-4xl text-heist-yellow">{gameState.phase === 'phase2' ? '2' : '1'}</span>
           </div>
+        </div>
+      </div>
+
+      {/* Confirmation Modal */}
+      {confirmConfig && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="panel-container border-2 border-heist-red p-6 max-w-md w-full relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-transparent via-heist-red to-transparent"></div>
+            
+            <div className="flex items-center gap-4 mb-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                confirmConfig.type === 'danger' ? 'bg-heist-red/20 text-heist-red' :
+                confirmConfig.type === 'warning' ? 'bg-orange-500/20 text-orange-500' :
+                confirmConfig.type === 'success' ? 'bg-heist-yellow/20 text-heist-yellow' :
+                'bg-heist-teal/20 text-heist-teal'
+              }`}>
+                <AlertTriangle size={28} />
+              </div>
+              <h3 className="heist-font text-3xl tracking-widest text-white m-0 uppercase">{confirmConfig.title}</h3>
+            </div>
+            
+            <p className="heist-mono text-gray-300 text-sm mb-8 leading-relaxed">
+              {confirmConfig.message}
+            </p>
+            
+            <div className="flex gap-4">
+              <button 
+                className="flex-1 py-3 heist-font text-xl tracking-widest bg-gray-800 text-gray-400 hover:bg-gray-700 transition-colors"
+                onClick={() => setConfirmConfig(null)}
+              >
+                CANCEL
+              </button>
+              <button 
+                className={`flex-1 py-3 heist-font text-xl tracking-widest text-black transition-colors ${
+                  confirmConfig.type === 'danger' ? 'bg-heist-red hover:bg-red-400' :
+                  confirmConfig.type === 'warning' ? 'bg-orange-500 hover:bg-orange-400' :
+                  confirmConfig.type === 'success' ? 'bg-heist-yellow hover:bg-yellow-400' :
+                  'bg-heist-teal hover:bg-teal-400'
+                }`}
+                onClick={() => {
+                  confirmConfig.onConfirm();
+                  setConfirmConfig(null);
+                }}
+              >
+                CONFIRM
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Diagnostics / Vercel Optimization Footer */}
+      <div className="mt-8 border-t border-white/5 pt-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${hasSupabaseConfig ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`}></div>
+            <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">
+              SUPABASE: {hasSupabaseConfig ? 'CONFIGURED' : 'MISSING CONFIG'}
+            </span>
+          </div>
+          {diagResult && (
+            <div className="heist-mono text-[10px] text-heist-teal animate-pulse">
+              {diagResult}
+            </div>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={runDiagnostics}
+            disabled={!!actionInProgress}
+            className="heist-mono text-[10px] text-gray-500 hover:text-white transition-colors border border-white/10 px-2 py-1 flex items-center gap-2"
+          >
+            <Activity size={12} />
+            RUN DIAGNOSTICS
+          </button>
+          <span className="heist-mono text-[10px] text-gray-600">
+            ENV: {import.meta.env.MODE.toUpperCase()}
+          </span>
         </div>
       </div>
     </div>
