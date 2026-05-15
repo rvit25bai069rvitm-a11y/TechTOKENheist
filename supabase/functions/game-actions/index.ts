@@ -305,7 +305,7 @@ serve(async (req) => {
         }
     }
 
-    const adminActions = ['enrollAllEligible', 'startGame', 'stopGame', 'resetGame', 'togglePhase', 'createTeam', 'editTeam', 'deleteTeam', 'updateTokens', 'recoverFromTimeout', 'createMatch', 'declareWinner', 'spinDomain', 'updateDomains', 'setTimeoutDuration', 'autoMatchPairs', 'endMatchAndStartFinale', 'declareFinaleWinner', 'endFinale', 'enforceWagerEliminations'];
+    const adminActions = ['enrollAllEligible', 'startGame', 'stopGame', 'resetGame', 'togglePhase', 'createTeam', 'editTeam', 'deleteTeam', 'updateTokens', 'recoverFromTimeout', 'createMatch', 'declareWinner', 'spinDomain', 'updateDomains', 'setTimeoutDuration', 'autoMatchPairs', 'endMatchAndStartFinale', 'setFinaleDomain', 'declareFinaleRoundWinner', 'endFinale', 'enforceWagerEliminations'];
     const playerActions = ['joinQueue', 'leaveQueue'];
 
     if (adminActions.includes(action) && userRole !== 'admin') {

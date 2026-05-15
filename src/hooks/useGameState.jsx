@@ -321,6 +321,10 @@ const useGameStateStore = create(
       updateDomains: async (domains) => get()._invoke('updateDomains', { domains }),
       setTimeoutDuration: async (durationMs) => get()._invoke('setTimeoutDuration', { durationMs }),
       autoMatchPairs: async () => get()._invoke('autoMatchPairs'),
+      endMatchAndStartFinale: async () => get()._invoke('endMatchAndStartFinale'),
+      setFinaleDomain: async (domain) => get()._invoke('setFinaleDomain', { domain }),
+      declareFinaleRoundWinner: async (winner) => get()._invoke('declareFinaleRoundWinner', { winner }),
+      endFinale: async () => get()._invoke('endFinale'),
     }),
     {
       name: 'heist-auth-storage',
