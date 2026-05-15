@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useGameState } from '../hooks/useGameState';
+import { hasSupabaseConfig } from '../lib/supabase';
 import {
   VenetianMask, Banknote, Lock, Bomb, Users, Search, Flame, Settings,
   Plus, X, Fingerprint, Wallet, Map, ScrollText, Crown, Zap, AlertTriangle, Clock,
