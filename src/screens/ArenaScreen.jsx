@@ -21,8 +21,8 @@ const ArenaScreen = () => {
   );
 
   const queueDiagnostics = React.useMemo(
-    () => buildQueueDiagnostics({ gameState, teams, matchmakingQueue, matchConstraints }),
-    [gameState, teams, matchmakingQueue, matchConstraints]
+    () => buildQueueDiagnostics({ gameState, teams, matchmakingQueue, matchConstraints, activeMatches }),
+    [activeMatches, gameState, teams, matchmakingQueue, matchConstraints]
   );
 
   const myQueueDiagnostics = React.useMemo(

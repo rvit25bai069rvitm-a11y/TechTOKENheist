@@ -51,7 +51,7 @@ const AdminScreen = () => {
     notifications, queuePairs, matchConstraints,
     startGame, stopGame, resetGame, togglePhase, createTeam, deleteTeam,
     updateTokens, createMatch, declareWinner, spinDomain, updateDomains, setTimeoutDuration,
-    enrollAllEligible,
+    autoMatchPairs,
     endMatchAndStartFinale, setFinaleDomain,
     declareFinaleRoundWinner, endFinale,
     _invoke
@@ -180,6 +180,12 @@ const AdminScreen = () => {
     return result;
   };
 
+  const handleDeclareWinner = (match, winningTeam) => {
+    if (!match?.id || !winningTeam?.id) return;
+    if (!window.confirm(`Confirm winner declaration for ${winningTeam.name}?`)) return;
+    safeAction(`declareWinner:${match.id}`, () => declareWinner(match.id, winningTeam.id));
+  };
+
   const updateTimeout = (minutes) => {
     if (minutes === null) {
       setTimeoutDuration(null);
@@ -194,8 +200,8 @@ const AdminScreen = () => {
   );
 
   const queueDiagnostics = useMemo(
-    () => buildQueueDiagnostics({ gameState, teams, matchmakingQueue, matchConstraints }),
-    [gameState, teams, matchmakingQueue, matchConstraints]
+    () => buildQueueDiagnostics({ gameState, teams, matchmakingQueue, matchConstraints, activeMatches }),
+    [activeMatches, gameState, teams, matchmakingQueue, matchConstraints]
   );
 
   const tabs = [
@@ -589,8 +595,12 @@ const AdminScreen = () => {
                 <div className="flex justify-between items-end border-b border-gray-700 pb-2">
                   <h4 className="heist-font text-heist-teal text-2xl tracking-wider m-0">AWAITING ASSIGNMENT ({waitingQueue.length})</h4>
                   {gameState.isGameActive && (
-                    <button className="heist-mono text-xs border border-gray-600 px-2 py-1 hover:bg-gray-800" onClick={enrollAllEligible}>
-                      FORCE RE-ENROLL
+                    <button
+                      className="heist-mono text-xs border border-gray-600 px-2 py-1 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-wait"
+                      onClick={() => safeAction('autoMatchPairs', autoMatchPairs)}
+                      disabled={!!actionInProgress}
+                    >
+                      {actionInProgress === 'autoMatchPairs' ? 'ASSIGNING...' : 'FORCE ASSIGN'}
                     </button>
                   )}
                 </div>
@@ -709,8 +719,12 @@ const AdminScreen = () => {
                         <div className="flex flex-col items-center text-center gap-2">
                           <span className="heist-font text-3xl text-white break-all">{m.teamA.name}</span>
                           <span className="heist-font text-heist-yellow text-xl">{m.teamA.tokens} TKN</span>
-                          <button onClick={() => declareWinner(m.id, m.teamA.id)} className="mt-2 border border-heist-teal text-heist-teal hover:bg-heist-teal hover:text-black px-4 py-2 heist-font tracking-widest transition-colors w-full">
-                            DECLARE WINNER
+                          <button
+                            onClick={() => handleDeclareWinner(m, m.teamA)}
+                            disabled={!!actionInProgress}
+                            className={`mt-2 border border-heist-teal text-heist-teal hover:bg-heist-teal hover:text-black px-4 py-2 heist-font tracking-widest transition-colors w-full ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
+                          >
+                            {actionInProgress === `declareWinner:${m.id}` ? 'DECLARING...' : 'DECLARE WINNER'}
                           </button>
                         </div>
 
@@ -722,8 +736,12 @@ const AdminScreen = () => {
                         <div className="flex flex-col items-center text-center gap-2">
                           <span className="heist-font text-3xl text-white break-all">{m.teamB.name}</span>
                           <span className="heist-font text-heist-yellow text-xl">{m.teamB.tokens} TKN</span>
-                          <button onClick={() => declareWinner(m.id, m.teamB.id)} className="mt-2 border border-heist-teal text-heist-teal hover:bg-heist-teal hover:text-black px-4 py-2 heist-font tracking-widest transition-colors w-full">
-                            DECLARE WINNER
+                          <button
+                            onClick={() => handleDeclareWinner(m, m.teamB)}
+                            disabled={!!actionInProgress}
+                            className={`mt-2 border border-heist-teal text-heist-teal hover:bg-heist-teal hover:text-black px-4 py-2 heist-font tracking-widest transition-colors w-full ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
+                          >
+                            {actionInProgress === `declareWinner:${m.id}` ? 'DECLARING...' : 'DECLARE WINNER'}
                           </button>
                         </div>
                       </div>

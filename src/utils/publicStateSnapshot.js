@@ -78,6 +78,29 @@ const fallbackTeam = (id) => ({
   status: 'idle',
 })
 
+const activeTeamIdsFromMatches = (matchRows) => {
+  const activeTeamIds = new Set()
+  ;(matchRows || []).forEach((match) => {
+    const teamAId = match?.team_a || match?.teamA?.id
+    const teamBId = match?.team_b || match?.teamB?.id
+    if (teamAId) activeTeamIds.add(teamAId)
+    if (teamBId) activeTeamIds.add(teamBId)
+  })
+  return activeTeamIds
+}
+
+const normalizeRuntimeTeamRow = (team, activeTeamIds, queueByTeamId) => {
+  if (!team || team.status !== 'fighting' || activeTeamIds.has(team.id)) return team
+
+  const queueRow = queueByTeamId.get(team.id)
+  return {
+    ...team,
+    status: 'idle',
+    tokens: queueRow?.team_tokens ?? queueRow?.teamTokens ?? team.tokens,
+    timeout_until: null,
+  }
+}
+
 const normalizeActiveMatch = (match, teamById) => {
   const teamAId = match?.team_a || match?.teamA?.id
   const teamBId = match?.team_b || match?.teamB?.id
@@ -104,7 +127,15 @@ export const buildPublicStateSnapshot = ({
   tokenHistory = [],
 } = {}) => {
   const system = (systemRows || []).find((row) => row?.key === 'game') || {}
-  const teams = (teamsRows || []).map(normalizeTeam)
+  const activeTeamIds = activeTeamIdsFromMatches(matchRows)
+  const queueByTeamId = new Map(
+    (queueRows || [])
+      .map((entry) => [entry?.team_id || entry?.teamId, entry])
+      .filter(([teamId]) => Boolean(teamId))
+  )
+  const teams = (teamsRows || [])
+    .map((team) => normalizeRuntimeTeamRow(team, activeTeamIds, queueByTeamId))
+    .map(normalizeTeam)
   const teamById = Object.fromEntries(teams.map((team) => [team.id, team]))
 
   const matchmakingQueue = (queueRows || []).map(normalizeQueueEntry)

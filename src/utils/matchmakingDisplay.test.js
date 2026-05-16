@@ -24,3 +24,19 @@ test('player shell counts only valid ready queue pairs', () => {
   assert.match(app, /matchConstraints/)
   assert.doesNotMatch(app, /buildQueuePairsFromEntries\(matchmakingQueue\)\.length/)
 })
+
+test('queue diagnostics receive active match context', () => {
+  const adminScreen = readProjectFile('src/screens/AdminScreen.jsx')
+  const arenaScreen = readProjectFile('src/screens/ArenaScreen.jsx')
+
+  assert.match(adminScreen, /buildQueueDiagnostics\(\{\s*gameState,\s*teams,\s*matchmakingQueue,\s*matchConstraints,\s*activeMatches\s*\}\)/)
+  assert.match(arenaScreen, /buildQueueDiagnostics\(\{\s*gameState,\s*teams,\s*matchmakingQueue,\s*matchConstraints,\s*activeMatches\s*\}\)/)
+})
+
+test('admin force assignment button invokes automatching', () => {
+  const adminScreen = readProjectFile('src/screens/AdminScreen.jsx')
+
+  assert.match(adminScreen, /autoMatchPairs/)
+  assert.match(adminScreen, /onClick=\{\(\) => safeAction\('autoMatchPairs', autoMatchPairs\)\}/)
+  assert.doesNotMatch(adminScreen, /onClick=\{enrollAllEligible\}/)
+})

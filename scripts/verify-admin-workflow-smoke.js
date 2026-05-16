@@ -765,6 +765,7 @@ const runAdminWorkflow = async ({ browser, baseUrl }) => {
   await waitForState(() => state.system.is_paused, 'Expected hold mission to pause the smoke game', state)
 
   await page.getByRole('button', { name: /RESET PARAMETERS/i }).click()
+  await page.getByPlaceholder('ENTER VERIFICATION KEY').fill('rvitmkimkc')
   await page.getByRole('button', { name: /CONFIRM/i }).click()
   await waitForState(
     () => !state.system.is_game_active && !state.system.is_paused && state.teams.length === 2 && state.active_matches.length === 0,

@@ -48,3 +48,35 @@ test('public state snapshot handles 35 teams without leaking credentials', () =>
   assert.equal(Object.hasOwn(snapshot.activeMatches[0].teamA, 'password'), false)
   assert.equal(Object.hasOwn(snapshot.activeMatches[0].teamB, 'password'), false)
 })
+
+test('public state snapshot releases queued orphan fighters from stale fighting status', () => {
+  const snapshot = buildPublicStateSnapshot({
+    systemRows: [
+      { key: 'game', status: 'active', is_game_active: true, is_paused: false, phase: 'phase1' },
+    ],
+    teamsRows: [
+      { id: 'team-a', name: 'Hakuna', member_names: ['Leader A'], tokens: 1, status: 'fighting' },
+      { id: 'team-b', name: 'Helsinki', member_names: ['Leader B'], tokens: 1, status: 'fighting' },
+      { id: 'team-c', name: 'Active One', member_names: ['Leader C'], tokens: 3, status: 'fighting' },
+      { id: 'team-d', name: 'Active Two', member_names: ['Leader D'], tokens: 2, status: 'fighting' },
+    ],
+    queueRows: [
+      { team_id: 'team-a', team_name: 'Hakuna', team_tokens: 2, matched_with: null },
+      { team_id: 'team-b', team_name: 'Helsinki', team_tokens: 2, matched_with: null },
+    ],
+    matchRows: [
+      { id: 'match-1', team_a: 'team-c', team_b: 'team-d', domain: 'Tech Quiz', start_time: 1_777_000_000_000 },
+    ],
+  })
+
+  const hakuna = snapshot.teams.find((team) => team.id === 'team-a')
+  const helsinki = snapshot.teams.find((team) => team.id === 'team-b')
+  const activeOne = snapshot.teams.find((team) => team.id === 'team-c')
+
+  assert.equal(hakuna.status, 'idle')
+  assert.equal(hakuna.tokens, 2)
+  assert.equal(helsinki.status, 'idle')
+  assert.equal(helsinki.tokens, 2)
+  assert.equal(activeOne.status, 'fighting')
+  assert.equal(snapshot.activeMatches[0].teamA.status, 'fighting')
+})

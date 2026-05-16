@@ -122,11 +122,24 @@ function scorePhase2(teamA, teamB) {
     return -Math.abs((teamA.tokens || 0) - (teamB.tokens || 0));
 }
 
+function buildActiveTeamIds(existingMatches) {
+    const activeTeamIds = new Set();
+    (existingMatches || []).forEach((match) => {
+        const aId = match.team_a || match.teamA?.id;
+        const bId = match.team_b || match.teamB?.id;
+        if (aId) activeTeamIds.add(aId);
+        if (bId) activeTeamIds.add(bId);
+    });
+    return activeTeamIds;
+}
+
 export function runMatchmaking({ gameState, teams, matchConstraints, existingMatches }) {
     const isPhase2 = gameState?.phase === 'phase2';
+    const activeTeamIds = buildActiveTeamIds(existingMatches);
 
     const eligible = (teams || []).filter((t) => {
-        if (t.status === 'eliminated' || t.status === 'fighting' || t.status === 'timeout') return false;
+        if (t.status === 'eliminated' || t.status === 'timeout') return false;
+        if (t.status === 'fighting' && activeTeamIds.has(t.id)) return false;
         const inMatch = (existingMatches || []).some((m) => {
             const aId = m.team_a || m.teamA?.id;
             const bId = m.team_b || m.teamB?.id;

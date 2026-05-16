@@ -111,6 +111,27 @@ test('runMatchmaking prioritizes largest token gaps in phase 2', () => {
   ])
 })
 
+test('phase 2 queued matchmaking excludes active matches and uses largest token differences', () => {
+  const pairs = runMatchmaking({
+    gameState: { phase: 'phase2' },
+    teams: [
+      { id: 'alpha', name: 'Alpha', tokens: 1, status: 'idle' },
+      { id: 'bravo', name: 'Bravo', tokens: 2, status: 'idle' },
+      { id: 'charlie', name: 'Charlie', tokens: 7, status: 'idle' },
+      { id: 'delta', name: 'Delta', tokens: 10, status: 'idle' },
+      { id: 'echo', name: 'Echo', tokens: 6, status: 'idle' },
+      { id: 'foxtrot', name: 'Foxtrot', tokens: 9, status: 'idle' },
+    ],
+    matchConstraints: {},
+    existingMatches: [{ team_a: 'charlie', team_b: 'foxtrot' }],
+  })
+
+  assert.deepEqual(pairs, [
+    { teamAId: 'alpha', teamAName: 'Alpha', teamBId: 'delta', teamBName: 'Delta' },
+    { teamAId: 'bravo', teamAName: 'Bravo', teamBId: 'echo', teamBName: 'Echo' },
+  ])
+})
+
 test('phase 2 still enforces opponent and domain allocation safety', () => {
   const teams = [
     { id: 'alpha', name: 'Alpha', tokens: 1, status: 'idle' },
@@ -379,14 +400,20 @@ test('runMatchmaking randomized invariant sweep returns only valid disjoint pair
       assert.equal(usedTeamIds.has(pair.teamBId), false, `scenario ${scenario}: ${pair.teamBId} used twice`)
       usedTeamIds.add(pair.teamAId)
       usedTeamIds.add(pair.teamBId)
-      assert.ok(['idle', 'queued'].includes(teamA.status || 'idle'), `scenario ${scenario}: ineligible teamA status ${teamA.status}`)
-      assert.ok(['idle', 'queued'].includes(teamB.status || 'idle'), `scenario ${scenario}: ineligible teamB status ${teamB.status}`)
+      assert.ok(
+        ['idle', 'queued'].includes(teamA.status || 'idle') || (teamA.status === 'fighting' && !activeTeamIds.has(teamA.id)),
+        `scenario ${scenario}: ineligible teamA status ${teamA.status}`
+      )
+      assert.ok(
+        ['idle', 'queued'].includes(teamB.status || 'idle') || (teamB.status === 'fighting' && !activeTeamIds.has(teamB.id)),
+        `scenario ${scenario}: ineligible teamB status ${teamB.status}`
+      )
       assert.ok((teamA.tokens ?? 0) > 0, `scenario ${scenario}: teamA has no tokens`)
       assert.ok((teamB.tokens ?? 0) > 0, `scenario ${scenario}: teamB has no tokens`)
       assert.equal(activeTeamIds.has(pair.teamAId), false, `scenario ${scenario}: teamA already active`)
       assert.equal(activeTeamIds.has(pair.teamBId), false, `scenario ${scenario}: teamB already active`)
       assert.deepEqual(
-        getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints }),
+        getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints, activeTeamIds }),
         [],
         `scenario ${scenario}: returned pair has block reasons`
       )
@@ -520,6 +547,62 @@ test('ready queue pairs exclude locked pairs that are now blocked by match const
     }),
     []
   )
+})
+
+test('stale fighting status without an active match does not block queued teams', () => {
+  const matchmakingQueue = [
+    { team_id: 'alpha', team_name: 'Alpha', team_tokens: 2, matched_with: 'bravo' },
+    { team_id: 'bravo', team_name: 'Bravo', team_tokens: 2, matched_with: 'alpha' },
+  ]
+  const waitingQueue = matchmakingQueue.map((entry) => ({ ...entry, matched_with: null }))
+  const teams = [
+    { id: 'alpha', name: 'Alpha', tokens: 2, status: 'fighting' },
+    { id: 'bravo', name: 'Bravo', tokens: 2, status: 'idle' },
+  ]
+
+  assert.deepEqual(
+    buildReadyQueuePairs({
+      matchmakingQueue,
+      teams,
+      activeMatches: [],
+      gameState: { phase: 'phase1' },
+      matchConstraints: {},
+    }),
+    [{ teamAId: 'alpha', teamAName: 'Alpha', teamBId: 'bravo', teamBName: 'Bravo' }]
+  )
+
+  const diagnostics = buildQueueDiagnostics({
+    gameState: { phase: 'phase1' },
+    teams,
+    matchmakingQueue: waitingQueue,
+    matchConstraints: {},
+    activeMatches: [],
+  })
+
+  const alphaDiagnostics = diagnostics.find((entry) => entry.teamId === 'alpha')
+  assert.equal(alphaDiagnostics.hasAnyPossibleMatch, true)
+  assert.equal(alphaDiagnostics.blockers[0].canMatchNow, true)
+  assert.doesNotMatch(alphaDiagnostics.blockers[0].reasons.join('\n'), /not eligible while fighting/)
+})
+
+test('active fighting teams remain blocked while their match exists', () => {
+  const diagnostics = buildQueueDiagnostics({
+    gameState: { phase: 'phase1' },
+    teams: [
+      { id: 'alpha', name: 'Alpha', tokens: 2, status: 'fighting' },
+      { id: 'bravo', name: 'Bravo', tokens: 2, status: 'idle' },
+    ],
+    matchmakingQueue: [
+      { team_id: 'alpha', team_name: 'Alpha', team_tokens: 2, matched_with: null },
+      { team_id: 'bravo', team_name: 'Bravo', team_tokens: 2, matched_with: null },
+    ],
+    matchConstraints: {},
+    activeMatches: [{ team_a: 'alpha', team_b: 'charlie' }],
+  })
+
+  const alphaDiagnostics = diagnostics.find((entry) => entry.teamId === 'alpha')
+  assert.equal(alphaDiagnostics.hasAnyPossibleMatch, false)
+  assert.match(alphaDiagnostics.blockers[0].reasons.join('\n'), /Alpha is not eligible while fighting/)
 })
 
 test('buildQueueDiagnostics accepts raw Supabase snake_case queue rows', () => {

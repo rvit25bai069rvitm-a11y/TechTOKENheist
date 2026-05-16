@@ -160,7 +160,79 @@ const enforceWagerEliminations = async () => {
     return teamIds;
 };
 
+const resolveTimeoutMs = (system, nowMs = Date.now()) => {
+    if (system?.timeout_duration_override) return system.timeout_duration_override;
+    if (system?.game_started_at) {
+        const elapsed = nowMs - system.game_started_at;
+        return elapsed <= 30 * 60 * 1000 ? 5 * 60 * 1000 : 15 * 60 * 1000;
+    }
+    return 5 * 60 * 1000;
+};
+
+const releaseOrphanedFightingTeams = async () => {
+    const [fightingTeams, matchRows, queueRows, system] = await Promise.all([
+        queryList(supabaseAdmin.from('teams').select('id, name, tokens').eq('status', 'fighting')),
+        queryList(supabaseAdmin.from('active_matches').select('team_a, team_b')),
+        queryList(supabaseAdmin.from('matchmaking_queue').select('team_id, team_name, team_tokens')),
+        getGameSystem(),
+    ]);
+
+    const activeTeamIds = new Set();
+    (matchRows || []).forEach((match) => {
+        if (match.team_a) activeTeamIds.add(match.team_a);
+        if (match.team_b) activeTeamIds.add(match.team_b);
+    });
+
+    const queueByTeamId = new Map((queueRows || []).map((row) => [row.team_id, row]));
+    const orphanedTeams = (fightingTeams || [])
+        .filter((team) => team?.id && !activeTeamIds.has(team.id));
+
+    if (!orphanedTeams.length) return { queued: [], unqueued: [] };
+
+    const nowMs = Date.now();
+    const queuedOrphans = orphanedTeams.filter((team) => queueByTeamId.has(team.id));
+    const unqueuedOrphanIds = orphanedTeams
+        .filter((team) => !queueByTeamId.has(team.id))
+        .map((team) => team.id);
+
+    const queuedUpdates = await Promise.all(queuedOrphans.map((team) => {
+        const queueRow = queueByTeamId.get(team.id);
+        return supabaseAdmin
+            .from('teams')
+            .update({
+                tokens: Number(queueRow.team_tokens ?? team.tokens ?? 1),
+                status: 'idle',
+                timeout_until: null,
+                last_token_update_time: nowMs,
+            })
+            .eq('id', team.id);
+    }));
+    const queuedError = queuedUpdates.find((result) => result.error)?.error;
+    if (queuedError) throw queuedError;
+
+    if (unqueuedOrphanIds.length) {
+        const unqueuedStatus = system?.phase === 'phase2' ? 'eliminated' : 'timeout';
+        const { error } = await supabaseAdmin
+            .from('teams')
+            .update({
+                tokens: 0,
+                status: unqueuedStatus,
+                timeout_until: unqueuedStatus === 'timeout' ? nowMs + resolveTimeoutMs(system, nowMs) : null,
+                last_token_update_time: nowMs,
+            })
+            .in('id', unqueuedOrphanIds);
+        if (error) throw error;
+    }
+
+    return {
+        queued: queuedOrphans.map((team) => team.id),
+        unqueued: unqueuedOrphanIds,
+    };
+};
+
 const enrollAllEligibleTeams = async () => {
+    await releaseOrphanedFightingTeams();
+
     const [allTeams, queueRows, matchRows] = await Promise.all([
         queryList(supabaseAdmin.from('teams').select('*')),
         queryList(supabaseAdmin.from('matchmaking_queue').select('team_id')),
@@ -442,8 +514,8 @@ serve(async (req) => {
             }
 
             case 'enrollAllEligible': {
-                await enrollAllEligibleTeams();
-                return ok();
+                const pairs = await autoMatchPairs();
+                return ok({ pairs });
             }
 
             case 'startGame': {
@@ -547,6 +619,11 @@ serve(async (req) => {
                     await supabaseAdmin.from('match_history').delete().neq('id', '00000000-0000-0000-0000-000000000000');
                     await enforceWagerEliminations();
                     await enrollAllEligibleTeams();
+                    await supabaseAdmin
+                        .from('matchmaking_queue')
+                        .update({ matched_with: null })
+                        .not('matched_with', 'is', null);
+                    await autoMatchPairs();
                 }
 
                 return ok();
@@ -650,19 +727,23 @@ serve(async (req) => {
                         updates.timeout_until = null;
                     } else if (team.status !== 'timeout') {
                         updates.status = 'timeout';
-                        let timeoutMs = 5 * 60 * 1000;
-                        if (system?.timeout_duration_override) {
-                            timeoutMs = system.timeout_duration_override;
-                        } else if (system?.game_started_at) {
-                            const elapsed = Date.now() - system.game_started_at;
-                            timeoutMs = elapsed <= 30 * 60 * 1000 ? 5 * 60 * 1000 : 15 * 60 * 1000;
-                        }
-                        updates.timeout_until = Date.now() + timeoutMs;
+                        const nowMs = Date.now();
+                        updates.timeout_until = nowMs + resolveTimeoutMs(system, nowMs);
                     }
                     await supabaseAdmin.from('matchmaking_queue').delete().eq('team_id', teamId);
                 }
 
-                await supabaseAdmin.from('teams').update(updates).eq('id', teamId);
+                const teamUpdate = await supabaseAdmin.from('teams').update(updates).eq('id', teamId);
+                if (teamUpdate.error) return fail(500, teamUpdate.error.message);
+
+                if (newTokens > 0) {
+                    const { error: queueUpdateError } = await supabaseAdmin
+                        .from('matchmaking_queue')
+                        .update({ team_tokens: Math.max(0, newTokens), matched_with: null })
+                        .eq('team_id', teamId);
+                    if (queueUpdateError) return fail(500, queueUpdateError.message);
+                }
+
                 await insertNotification(`Admin adjusted tokens for ${team?.name || 'Unknown'}: ${amount > 0 ? '+' : ''}${amount} TKN${reason ? ` (${reason})` : ''}.`);
                 return ok();
             }
@@ -741,10 +822,16 @@ serve(async (req) => {
                 const winnerId = payload?.winnerId;
                 if (!matchId || !winnerId) return fail(400, 'Missing matchId or winnerId');
 
-                const match = await querySingle(
-                    supabaseAdmin.from('active_matches').select('*').eq('id', matchId).limit(1).maybeSingle()
-                );
-                if (!match) return ok();
+                const { data: match, error: claimError } = await supabaseAdmin
+                    .from('active_matches')
+                    .delete()
+                    .eq('id', matchId)
+                    .or(`team_a.eq.${winnerId},team_b.eq.${winnerId}`)
+                    .select('*')
+                    .maybeSingle();
+
+                if (claimError) return fail(500, claimError.message);
+                if (!match) return fail(404, 'Active match not found for winner declaration');
 
                 const system = await getGameSystem();
                 const loserId = match.team_a === winnerId ? match.team_b : match.team_a;
@@ -754,10 +841,7 @@ serve(async (req) => {
                     querySingle(supabaseAdmin.from('teams').select('*').eq('id', loserId).limit(1).maybeSingle()),
                 ]);
 
-                if (!winnerTeam || !loserTeam) {
-                    await supabaseAdmin.from('active_matches').delete().eq('id', matchId);
-                    return ok();
-                }
+                if (!winnerTeam || !loserTeam) return fail(404, 'Winner or loser team not found');
 
                 const isWager = Boolean(match?.is_wager || match?.isWager || system?.phase === 'phase2');
                 let winnerTokens;
@@ -789,19 +873,22 @@ serve(async (req) => {
                     }
                 }
 
-                await supabaseAdmin.from('teams').update({
+                const nowMs = Date.now();
+                const winnerUpdate = await supabaseAdmin.from('teams').update({
                     tokens: winnerTokens,
                     status: 'idle',
-                    last_token_update_time: Date.now(),
+                    last_token_update_time: nowMs,
                     timeout_until: null,
                 }).eq('id', winnerId);
+                if (winnerUpdate.error) return fail(500, winnerUpdate.error.message);
 
-                await supabaseAdmin.from('teams').update({
+                const loserUpdate = await supabaseAdmin.from('teams').update({
                     tokens: loserTokens,
                     status: loserStatus,
-                    last_token_update_time: Date.now(),
-                    timeout_until: loserStatus === 'timeout' ? Date.now() + timeoutMs : null,
+                    last_token_update_time: nowMs,
+                    timeout_until: loserStatus === 'timeout' ? nowMs + timeoutMs : null,
                 }).eq('id', loserId);
+                if (loserUpdate.error) return fail(500, loserUpdate.error.message);
 
                 const winDelta = winnerTokens - (winnerTeam.tokens ?? 0);
                 const loseDelta = loserTokens - (loserTeam.tokens ?? 0);
@@ -846,21 +933,17 @@ serve(async (req) => {
                     ]);
                 }
 
-
-                await supabaseAdmin.from('active_matches').delete().eq('id', matchId);
-
                 const sysCheck = await getGameSystem();
                 if (sysCheck?.is_game_active && !sysCheck?.is_paused) {
                     const reEnqueue = async (teamId, teamName, status, tokens) => {
                         if (status === 'eliminated' || status === 'timeout' || tokens <= 0) return;
-                        const alreadyInQueue = await querySingle(
-                            supabaseAdmin.from('matchmaking_queue').select('id').eq('team_id', teamId).maybeSingle()
-                        );
-                        if (!alreadyInQueue) {
-                            await supabaseAdmin
-                                .from('matchmaking_queue')
-                                .insert([{ team_id: teamId, team_name: teamName, team_tokens: tokens }]);
-                        }
+                        const { error } = await supabaseAdmin
+                            .from('matchmaking_queue')
+                            .upsert(
+                                [{ team_id: teamId, team_name: teamName, team_tokens: tokens, matched_with: null }],
+                                { onConflict: 'team_id' }
+                            );
+                        if (error) throw error;
                     };
                     await reEnqueue(winnerId, winnerTeam.name, 'idle', winnerTokens);
                     await reEnqueue(loserId, loserTeam.name, loserStatus, loserTokens);

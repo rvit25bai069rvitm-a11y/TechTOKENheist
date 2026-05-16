@@ -11,11 +11,27 @@ const queueTeamName = (entry) => entry?.teamName || entry?.team_name
 const queueTeamTokens = (entry) => entry?.teamTokens ?? entry?.team_tokens ?? 0
 const queueMatchedWith = (entry) => entry?.matchedWith || entry?.matched_with || null
 
-const isEligibleForMatch = (team) => {
+const buildActiveTeamIds = (activeMatches) => {
+  const activeTeamIds = new Set()
+  ;(activeMatches || []).forEach((match) => {
+    const teamAId = match?.team_a || match?.teamA?.id
+    const teamBId = match?.team_b || match?.teamB?.id
+    if (teamAId) activeTeamIds.add(teamAId)
+    if (teamBId) activeTeamIds.add(teamBId)
+  })
+  return activeTeamIds
+}
+
+const isEligibleForMatch = (team, activeTeamIds = null) => {
   if (!team) return { ok: false, reason: 'Team data unavailable' }
 
   const status = team.status || 'idle'
-  if (!ELIGIBLE_QUEUE_STATUSES.has(status)) {
+  const hasActiveContext = activeTeamIds instanceof Set
+  if (status === 'fighting') {
+    if (!hasActiveContext || activeTeamIds.has(team.id)) {
+      return { ok: false, reason: `${team.name || team.id} is not eligible while ${status}` }
+    }
+  } else if (!ELIGIBLE_QUEUE_STATUSES.has(status)) {
     return { ok: false, reason: `${team.name || team.id} is not eligible while ${status}` }
   }
 
@@ -96,12 +112,12 @@ export function buildConstraintsFromHistory(matchHistory, teams) {
  * Get all reasons why two teams cannot be matched right now.
  * Returns an empty array if they can be matched.
  */
-export function getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints }) {
+export function getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints, activeTeamIds }) {
   if (!teamA || !teamB) return ['Team data unavailable']
 
   const reasons = []
-  const eligibilityA = isEligibleForMatch(teamA)
-  const eligibilityB = isEligibleForMatch(teamB)
+  const eligibilityA = isEligibleForMatch(teamA, activeTeamIds)
+  const eligibilityB = isEligibleForMatch(teamB, activeTeamIds)
   if (!eligibilityA.ok) reasons.push(eligibilityA.reason)
   if (!eligibilityB.ok) reasons.push(eligibilityB.reason)
   if ((teamA.tokens ?? 0) <= 0 && !reasons.includes(`${teamA.name || teamA.id} has no tokens`)) {
@@ -201,9 +217,10 @@ function scorePhase2(teamA, teamB) {
  */
 export function runMatchmaking({ gameState, teams, matchConstraints, existingMatches }) {
   const isPhase2 = gameState?.phase === 'phase2'
+  const activeTeamIds = buildActiveTeamIds(existingMatches)
 
   const eligible = (teams || []).filter((team) => {
-    if (!isEligibleForMatch(team).ok) return false
+    if (!isEligibleForMatch(team, activeTeamIds).ok) return false
 
     const inMatch = (existingMatches || []).some((match) => {
       const aId = match.team_a || match.teamA?.id
@@ -223,6 +240,7 @@ export function runMatchmaking({ gameState, teams, matchConstraints, existingMat
         teamA: eligible[i],
         teamB: eligible[j],
         matchConstraints,
+        activeTeamIds,
       })
       if (reasons.length === 0) {
         const score = isPhase2
@@ -326,15 +344,8 @@ export function findStaleMatchedQueueTeamIds(matchmakingQueue) {
 
 export function findInvalidMatchedQueueTeamIds({ matchmakingQueue, teams, activeMatches, gameState, matchConstraints }) {
   const teamById = new Map((teams || []).map((team) => [team.id, team]))
-  const activeTeamIds = new Set()
+  const activeTeamIds = buildActiveTeamIds(activeMatches)
   const invalidIds = new Set()
-
-  ;(activeMatches || []).forEach((match) => {
-    const teamAId = match.team_a || match.teamA?.id
-    const teamBId = match.team_b || match.teamB?.id
-    if (teamAId) activeTeamIds.add(teamAId)
-    if (teamBId) activeTeamIds.add(teamBId)
-  })
 
   for (const pair of buildQueuePairsFromEntries(matchmakingQueue)) {
     const teamA = teamById.get(pair.teamAId)
@@ -344,7 +355,7 @@ export function findInvalidMatchedQueueTeamIds({ matchmakingQueue, teams, active
       !teamB ||
       activeTeamIds.has(pair.teamAId) ||
       activeTeamIds.has(pair.teamBId) ||
-      getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints }).length > 0
+      getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints, activeTeamIds }).length > 0
 
     if (invalid) {
       invalidIds.add(pair.teamAId)
@@ -357,15 +368,8 @@ export function findInvalidMatchedQueueTeamIds({ matchmakingQueue, teams, active
 
 export function buildReadyQueuePairs({ gameState, teams, matchmakingQueue, matchConstraints, activeMatches }) {
   const teamById = new Map((teams || []).map((team) => [team.id, team]))
-  const activeTeamIds = new Set()
+  const activeTeamIds = buildActiveTeamIds(activeMatches)
   const readyPairs = []
-
-  ;(activeMatches || []).forEach((match) => {
-    const teamAId = match.team_a || match.teamA?.id
-    const teamBId = match.team_b || match.teamB?.id
-    if (teamAId) activeTeamIds.add(teamAId)
-    if (teamBId) activeTeamIds.add(teamBId)
-  })
 
   for (const pair of buildQueuePairsFromEntries(matchmakingQueue)) {
     const { teamAId, teamBId } = pair
@@ -375,7 +379,7 @@ export function buildReadyQueuePairs({ gameState, teams, matchmakingQueue, match
     const teamB = teamById.get(teamBId)
     if (!teamA || !teamB) continue
 
-    const reasons = getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints })
+    const reasons = getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints, activeTeamIds })
     if (reasons.length > 0) continue
 
     readyPairs.push({
@@ -393,9 +397,10 @@ export function buildReadyQueuePairs({ gameState, teams, matchmakingQueue, match
  * Build queue diagnostics for the admin panel.
  * Shows each waiting team and why they are or are not matchable with others.
  */
-export function buildQueueDiagnostics({ gameState, teams, matchmakingQueue, matchConstraints }) {
+export function buildQueueDiagnostics({ gameState, teams, matchmakingQueue, matchConstraints, activeMatches }) {
   const waiting = (matchmakingQueue || []).filter((entry) => !queueMatchedWith(entry))
   const byId = new Map((teams || []).map((team) => [team.id, team]))
+  const activeTeamIds = buildActiveTeamIds(activeMatches)
 
   return waiting.map((entry) => {
     const self = byId.get(queueTeamId(entry))
@@ -403,7 +408,7 @@ export function buildQueueDiagnostics({ gameState, teams, matchmakingQueue, matc
       .filter((other) => queueTeamId(other) !== queueTeamId(entry))
       .map((other) => {
         const otherTeam = byId.get(queueTeamId(other))
-        const reasons = getQueueBlockReasons({ gameState, teamA: self, teamB: otherTeam, matchConstraints })
+        const reasons = getQueueBlockReasons({ gameState, teamA: self, teamB: otherTeam, matchConstraints, activeTeamIds })
         return {
           teamId: queueTeamId(other),
           teamName: queueTeamName(other),
