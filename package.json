@@ -6,9 +6,29 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "postbuild": "node scripts/prune-dist-public.js && node scripts/verify-dist-artifacts.js && node scripts/verify-static-routes.js",
     "lint": "eslint .",
     "test": "node --test tests/*.test.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify": "npm run test && node --test src/utils/publicStateSnapshot.test.js src/utils/supabasePublicStateContract.test.js src/utils/edgeFunctionRuntime.test.js src/utils/matchmaking.test.js src/utils/matchmakingDisplay.test.js src/utils/deployAssets.test.js && npm run lint && npm run build",
+    "verify:install": "npm ci --dry-run",
+    "verify:dist": "node scripts/verify-dist-artifacts.js",
+    "verify:static-routes": "node scripts/verify-static-routes.js",
+    "verify:browser": "node scripts/verify-browser-smoke.js",
+    "verify:browser:configured": "node scripts/verify-configured-browser-smoke.js",
+    "verify:admin-workflow": "node scripts/verify-admin-workflow-smoke.js",
+    "verify:supabase": "node scripts/verify-vercel-build-env.js --always",
+    "verify:supabase:local-sql": "node scripts/verify-supabase-sql-local.js",
+    "verify:supabase:mutations": "node scripts/verify-vercel-build-env.js --always",
+    "verify:vercel-build-env": "node scripts/verify-vercel-build-env.js",
+    "verify:vercel-env": "node scripts/verify-vercel-production-env.js",
+    "verify:production-deploy": "node scripts/verify-production-deploy.js",
+    "verify:live-status": "node scripts/verify-live-status.js",
+    "verify:event": "npm run verify && npm run verify:browser && npm run verify:browser:configured && npm run verify:admin-workflow && npm run verify:supabase:local-sql && npm run verify:supabase:mutations",
+    "verify:release": "node scripts/verify-release.js",
+    "supabase:apply-policies": "node scripts/apply-supabase-policies.js",
+    "vercel:set-production-env": "node scripts/set-vercel-production-env.js",
+    "deploy:production": "node scripts/deploy-production.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
@@ -30,6 +50,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
+    "playwright": "^1.60.0",
     "postcss": "^8.5.14",
     "tailwindcss": "^3.4.19",
     "vite": "^8.0.10"

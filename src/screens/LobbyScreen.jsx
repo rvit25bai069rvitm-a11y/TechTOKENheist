@@ -60,7 +60,7 @@ const LobbyScreen = () => {
                 : 'opacity-20 group-hover:opacity-40'
             }`}>
                <img 
-                 src={gameState.isGameActive ? "/icons/openbank.png" : "/icons/closedbank.png"} 
+                 src={gameState.isGameActive ? "/icons/openbank.jpg" : "/icons/closedbank.png"}
                  alt="Bank" 
                  className={`w-full h-full object-contain transition-all duration-500 ${
                    gameState.isGameActive 

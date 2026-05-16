@@ -1,0 +1,82 @@
+# Local dependency/build output
+node_modules/
+dist/
+dist-ssr/
+.vercel/
+
+# Local secrets and environment files.
+# The full production event template stays in git as source documentation only.
+.env
+.env.*
+!.env.example
+server/serviceAccountKey.json
+
+# Agent/editor caches are not application source.
+.agents/
+.claude/
+.codex-run/
+.kiro/
+.trae/
+.windsurf/
+
+# Local logs and smoke-test output
+logs/
+*.log
+.codex-*.log
+*.local.sql
+
+# Tests are source verification only; they contain secret-shaped sentinel text.
+src/**/*.test.js
+
+# Local verification and audit-only material
+.github/
+scratch/
+security_audit_report.md
+security_audit_report.md.resolved
+prd.md
+skills-lock.json
+
+# One-off local artifacts that are not Vite build inputs
+admin-panel-mock.html
+Create_a_hyper_cinematic_D_im.mp4
+TechTokenHeist_Rulebook (1).docx
+
+# Public assets that are intentionally pruned from production builds
+public/icons.svg
+public/player1.png
+public/player2.png
+public/icons/arena.png
+public/icons/bgmap.png
+public/icons/cams.png
+public/icons/escape.png
+public/icons/leaderboard.png
+public/icons/logo.png
+public/icons/openbank.png
+public/icons/matchhistory.png
+public/icons/rulebook.png
+public/icons/team.png
+public/icons/tokencounter.png
+
+# Legacy image originals replaced by smaller imported assets
+assets/admin_panel.jpg
+assets/player1.png
+assets/player2.png
+assets/proffesor.png
+assets/rvitm.png
+assets/song.mp3
+assets/icons/berlinl.jpeg
+assets/icons/bgmap.png
+assets/icons/note.png
+assets/icons/riod.png
+assets/icons/riol.jpeg
+assets/icons/tokyod.png
+assets/icons/tokyol.jpeg
+assets/icons/arena.png
+assets/icons/cams.png
+assets/icons/escape.png
+assets/icons/leaderboard.png
+assets/icons/logo.png
+assets/icons/matchhistory.png
+assets/icons/rulebook.png
+assets/icons/team.png
+assets/icons/tokencounter.png

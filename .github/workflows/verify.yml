@@ -1,0 +1,48 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 24]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test, lint, build, and audit
+        run: npm run verify
+
+      - name: Install Playwright Chromium
+        if: matrix.node-version == 24
+        run: npm exec --yes playwright -- install --with-deps chromium
+
+      - name: Verify browser smoke
+        if: matrix.node-version == 24
+        run: npm run verify:browser
+
+      - name: Verify configured browser smoke
+        if: matrix.node-version == 24
+        run: npm run verify:browser:configured
+
+      - name: Verify admin workflow smoke
+        if: matrix.node-version == 24
+        run: npm run verify:admin-workflow
+
+      - name: Verify Supabase SQL locally
+        if: matrix.node-version == 22
+        run: npm run verify:supabase:local-sql

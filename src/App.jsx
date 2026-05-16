@@ -1,10 +1,12 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { GameStateProvider, useGameState } from './hooks/useGameState';
+import { hasSupabaseConfig } from './lib/supabase';
 import { LayoutDashboard, Swords, Crosshair, Book, Eye, Zap, VenetianMask, Users } from 'lucide-react';
 import CountdownOverlay from './components/CountdownOverlay';
 import MatchStartOverlay from './components/MatchStartOverlay';
 import FinaleOverlay from './components/FinaleOverlay';
+import { buildReadyQueuePairs } from './utils/matchmaking';
 import gdgLogo from '../assets/gdg.png';
 
 import './PlayerLayout.css';
@@ -18,6 +20,24 @@ const AdminScreen = lazy(() => import('./screens/AdminScreen'));
 const RulebookScreen = lazy(() => import('./screens/RulebookScreen'));
 const AboutScreen = lazy(() => import('./screens/AboutScreen'));
 const DevsScreen = lazy(() => import('./screens/DevsScreen'));
+
+const missingSupabaseConfigMessage =
+  'VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set to real Supabase values before running the event build.';
+
+const MissingSupabaseConfig = () => {
+  useEffect(() => {
+    console.error(missingSupabaseConfigMessage);
+  }, []);
+
+  return (
+    <div data-testid="supabase-config-missing" className="min-h-screen bg-black text-white flex items-center justify-center p-8">
+      <div className="max-w-xl border border-red-700 bg-red-950/20 p-6 text-center">
+        <h1 className="heist-font text-4xl text-red-500 mb-4">SUPABASE CONFIG MISSING</h1>
+        <p className="heist-mono text-sm text-gray-300">{missingSupabaseConfigMessage}</p>
+      </div>
+    </div>
+  );
+};
 
 const PlayerTopBar = () => {
   const { myTeam, logout, gameTimer } = useGameState();
@@ -154,7 +174,15 @@ const AdminLayout = ({ children }) => {
 };
 
 const PlayerLayout = ({ children }) => {
-  const { teams, gameState } = useGameState();
+  const { teams, gameState, matchmakingQueue, matchConstraints, activeMatches } = useGameState();
+  const readyPairs = buildReadyQueuePairs({
+    gameState,
+    teams,
+    matchmakingQueue,
+    matchConstraints,
+    activeMatches,
+  });
+
   return (
     <div className="player-layout-container">
       <PlayerTopBar />
@@ -174,11 +202,11 @@ const PlayerLayout = ({ children }) => {
         </div>
         <div className="bottom-stat">
           <span className="stat-label">PLANS READY:</span>
-          <span className="stat-value">5</span>
+          <span className="stat-value">{readyPairs.length}</span>
         </div>
         <div className="bottom-stat">
           <span className="stat-label">ACTIVE MISSIONS:</span>
-          <span className="stat-value">3</span>
+          <span className="stat-value">{activeMatches.length}</span>
         </div>
         <div className="bottom-stat">
           <span className="stat-label">PHASE:</span>
@@ -194,6 +222,7 @@ const AppContent = () => {
   const { user, countdown, hasHydrated } = useGameState();
 
   if (!hasHydrated) return null;
+  if (!hasSupabaseConfig) return <MissingSupabaseConfig />;
 
   return (
     <>

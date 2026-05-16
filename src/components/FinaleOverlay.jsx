@@ -101,16 +101,15 @@ const FinaleRoundTimer = ({ startTime, isPaused = false, pausedAt = null, classN
 /* ─── Main Finale Overlay ─── */
 const FinaleOverlay = () => {
   const { gameState, user, myTeam } = useGameState();
+  const [shaking, setShaking] = useState(false);
+  const [prevRound, setPrevRound] = useState(-1);
+
   const finaleState = gameState.finaleState;
-
-  // Don't show if no finale active or admin view
-  if (!finaleState || !finaleState.isFinaleActive || user?.role === 'admin') return null;
-
   const {
     teamAName, teamBName,
-    finaleResults, currentRound, currentDomain,
+    finaleResults, currentRound = 0, currentDomain,
     finaleWinner, winsA, winsB,
-  } = finaleState;
+  } = finaleState || {};
 
   const resolvedWinsA = winsA || 0;
   const resolvedWinsB = winsB || 0;
@@ -127,6 +126,21 @@ const FinaleOverlay = () => {
     : 'Battle feed locked. Witness the finalists in the arena.';
   const lockTag = isFinalist ? 'FIGHT FOR THE CROWN' : 'WITNESS THE ARENA SHOWDOWN';
 
+  // Screen shake on round change
+  useEffect(() => {
+    if (!finaleState?.isFinaleActive || user?.role === 'admin') return undefined;
+    if (currentRound !== prevRound && currentRound > 0) {
+      setShaking(true);
+      const timeoutId = setTimeout(() => setShaking(false), 500);
+      setPrevRound(currentRound);
+      return () => clearTimeout(timeoutId);
+    }
+    return undefined;
+  }, [currentRound, finaleState?.isFinaleActive, prevRound, user?.role]);
+
+  // Don't show if no finale active or admin view
+  if (!finaleState || !finaleState.isFinaleActive || user?.role === 'admin') return null;
+
   // Victory screen
   if (finaleWinner) {
     const winnerName = finaleWinner === 'a' ? teamAName : teamBName;
@@ -141,10 +155,8 @@ const FinaleOverlay = () => {
     );
   }
 
-  const shakeClass = currentRound > 0 ? 'finale-shake' : '';
-
   return (
-    <div className={`finale-overlay ${shakeClass} ${roleClass}`}>
+    <div className={`finale-overlay ${shaking ? 'finale-shake' : ''} ${roleClass}`}>
       <div className="finale-bg-grid" />
       <div className="finale-bg-radial" />
       <div className="finale-scanlines" />

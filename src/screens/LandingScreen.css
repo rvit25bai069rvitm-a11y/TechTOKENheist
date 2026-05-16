@@ -137,8 +137,9 @@ html.landing-scroll-mode {
   height: 100vh;
   height: 100svh;
   background-color: #070909;
+  --phase-red-progress: 0;
   transform-origin: center center;
-  will-change: transform;
+  will-change: opacity;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
@@ -146,11 +147,18 @@ html.landing-scroll-mode {
 
 .vault-bg-inner {
   position: absolute;
-  inset: -15%; /* Margin for zoom overflow */
+  inset: 0;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  will-change: transform;
+  filter: brightness(0.5);
+  transform: none;
+}
+
+.vault-bg-inner--red {
+  filter: brightness(0.6) sepia(1) hue-rotate(320deg) saturate(3);
+  opacity: var(--phase-red-progress);
+  transition: opacity 620ms ease-out;
 }
 
 .vault-fog {

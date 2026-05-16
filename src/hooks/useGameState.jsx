@@ -3,8 +3,9 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { queryClient } from '../lib/queryClient'
 import supabase, { hasSupabaseConfig } from '../lib/supabase'
-import { buildConstraintsFromHistory } from '../utils/matchmaking'
 import { getProfileAvatar } from '../data/profileAvatars'
+import { buildReadyQueuePairs } from '../utils/matchmaking'
+import { buildPublicStateSnapshot, SAFE_TEAM_COLUMNS, toMillis } from '../utils/publicStateSnapshot'
 
 const createInitialGameState = () => ({
   gameState: { isGameActive: false, isPaused: false, gameStartedAt: null, pausedAt: null, phase: 'phase1', status: 'not_started' },
@@ -25,72 +26,18 @@ const createInitialClientState = () => ({
   hasHydrated: false,
 })
 
-const formatToIST = (value) => {
-  try {
-    const d = value ? new Date(value) : new Date()
-    return new Intl.DateTimeFormat('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-      timeZone: 'Asia/Kolkata',
-      timeZoneName: 'short',
-    }).format(d)
-  } catch {
-    try { return new Date(value || Date.now()).toLocaleString() } catch { return String(value) }
-  }
-}
-
 let countdownInterval = null
 let timerInterval = null
 let fallbackPollInterval = null
 let refreshTimeout = null
+let publicStateFunctionDisabled = false
+
+const PUBLIC_STATE_POLL_MS = 6000
+const PUBLIC_STATE_REFRESH_DEBOUNCE_MS = 250
 
 // Mutex to serialize admin _invoke calls and prevent concurrent edge-function storms
 let _invokeInFlight = false
 const _invokeQueue = []
-
-const normalizeTeam = (team) => {
-  const memberNames = team?.member_names || team?.memberNames || []
-  return {
-    ...team,
-    avatarSrc: getProfileAvatar(team?.name),
-    memberNames,
-    members: memberNames.length,
-    leader: team?.leader || memberNames[0] || team?.name,
-    status: team?.status || 'idle',
-    tokens: team?.tokens ?? 1,
-    totalTime: team?.total_time ?? team?.totalTime ?? 0,
-    timeoutUntil: toMillis(team?.timeout_until ?? team?.timeoutUntil ?? null),
-    lastTokenUpdateTime: toMillis(team?.last_token_update_time ?? team?.lastTokenUpdateTime ?? null),
-  }
-}
-
-const normalizeQueueEntry = (entry) => ({
-  ...entry,
-  teamId: entry?.team_id || entry?.teamId,
-  teamName: entry?.team_name || entry?.teamName,
-  teamTokens: entry?.team_tokens ?? entry?.teamTokens ?? 0,
-  matchedWith: entry?.matched_with || entry?.matchedWith || null,
-})
-
-const toMillis = (value) => {
-  if (!value) return null
-  if (typeof value === 'number') return value
-  if (typeof value === 'bigint') return Number(value)
-  if (typeof value === 'string') {
-    const trimmed = value.trim()
-    if (/^\d+$/.test(trimmed)) {
-      const asNumber = Number(trimmed)
-      return Number.isNaN(asNumber) ? null : asNumber
-    }
-  }
-  const parsed = Date.parse(value)
-  return Number.isNaN(parsed) ? null : parsed
-}
 
 const syncQueryCache = (snapshot) => {
   queryClient.setQueryData(['game-state'], snapshot)
@@ -201,7 +148,7 @@ const useGameStateStore = create(
                         const text = await error.context.text();
                         if (text && text.length < 200) errorMessage = text;
                       } catch {
-                        // Keep the original Supabase error message.
+                        // Ignore secondary parse failures and keep the original Supabase error.
                       }
                     }
                   }
@@ -237,7 +184,7 @@ const useGameStateStore = create(
                 try {
                   get().triggerFetchPublicState?.()
                 } catch {
-                  // Refetch is best-effort after a mutation.
+                  // Mutation success should not fail if a best-effort refetch cannot be scheduled.
                 }
 
                 return { success: true, data: data?.data }
@@ -332,6 +279,59 @@ const useGameSocketBridge = () => {
     let fetchInFlight = false
     let refreshQueued = false
 
+    const fetchPublicStateRowsDirect = async () => {
+      const [
+        { data: systemRows, error: sysErr },
+        { data: teamsRows, error: teamErr },
+        { data: queueRows, error: queueErr },
+        { data: matchRows, error: matchErr },
+        { data: historyRows, error: histErr },
+        { data: notificationRows, error: notifErr },
+        { data: tokenHistory, error: tokErr }
+      ] = await Promise.all([
+        supabase.from('system').select('*').eq('key', 'game'),
+        supabase.from('teams').select(SAFE_TEAM_COLUMNS).order('name', { ascending: true }),
+        supabase.from('matchmaking_queue').select('*'),
+        supabase.from('active_matches').select('*'),
+        supabase.from('match_history').select('*'),
+        supabase.from('notifications').select('*'),
+        supabase.from('token_history').select('*')
+      ])
+
+      const queryErrors = [
+        ['system', sysErr],
+        ['teams', teamErr],
+        ['matchmaking_queue', queueErr],
+        ['active_matches', matchErr],
+        ['match_history', histErr],
+        ['notifications', notifErr],
+        ['token_history', tokErr],
+      ].filter(([, err]) => Boolean(err))
+
+      if (queryErrors.length > 0) {
+        console.group('Supabase public state fetch errors')
+        queryErrors.forEach(([tableName, err]) => {
+          console.error(`${tableName} error:`, err)
+        })
+        console.groupEnd()
+        throw new Error(`Public state fetch failed for ${queryErrors.map(([tableName]) => tableName).join(', ')}`)
+      }
+
+      return { systemRows, teamsRows, queueRows, matchRows, historyRows, notificationRows, tokenHistory }
+    }
+
+    const fetchPublicStateRows = async () => {
+      if (hasSupabaseConfig && !publicStateFunctionDisabled && typeof supabase.functions?.invoke === 'function') {
+        const { data, error } = await supabase.functions.invoke('public-state')
+        if (!error && data && !data.error) return data
+
+        publicStateFunctionDisabled = true
+        console.warn('public-state edge function unavailable; falling back to direct table reads.', error || data?.error)
+      }
+
+      return fetchPublicStateRowsDirect()
+    }
+
     const fetchPublicState = async () => {
       if (fetchInFlight) {
         refreshQueued = true
@@ -340,109 +340,8 @@ const useGameSocketBridge = () => {
 
       fetchInFlight = true
       try {
-        // Run all queries in parallel for the fastest "no lag" response
-        const [
-          { data: systemRows, error: sysErr },
-          { data: teamsRows, error: teamErr },
-          { data: queueRows, error: queueErr },
-          { data: matchRows, error: matchErr },
-          { data: historyRows, error: histErr },
-          { data: notificationRows, error: notifErr },
-          { data: tokenHistory, error: tokErr }
-        ] = await Promise.all([
-          supabase.from('system').select('*').eq('key', 'game'),
-          supabase.from('teams').select('*').order('name', { ascending: true }),
-          supabase.from('matchmaking_queue').select('*'),
-          supabase.from('active_matches').select('*'),
-          supabase.from('match_history').select('*'),
-          supabase.from('notifications').select('*'),
-          supabase.from('token_history').select('*')
-        ]);
-
-        const queryErrors = [
-          ['system', sysErr],
-          ['teams', teamErr],
-          ['matchmaking_queue', queueErr],
-          ['active_matches', matchErr],
-          ['match_history', histErr],
-          ['notifications', notifErr],
-          ['token_history', tokErr],
-        ].filter(([, err]) => Boolean(err))
-
-        if (queryErrors.length > 0) {
-          console.group('Supabase public state fetch errors')
-          queryErrors.forEach(([tableName, err]) => {
-            console.error(`${tableName} error:`, err)
-          })
-          console.groupEnd()
-        }
-
-        const system = (systemRows && systemRows[0]) || {}
-
-        const teams = (teamsRows || []).map(normalizeTeam)
-        const teamById = Object.fromEntries(teams.map((t) => [t.id, t]))
-
-        const matchmakingQueue = (queueRows || []).map(normalizeQueueEntry)
-        const activeMatches = (matchRows || []).map((m) => {
-          const teamAId = m.team_a || m.teamA?.id
-          const teamBId = m.team_b || m.teamB?.id
-          const teamA = m.teamA || (teamAId ? teamById[teamAId] : null)
-          const teamB = m.teamB || (teamBId ? teamById[teamBId] : null)
-          const startTime = toMillis(m.start_time || m.startTime)
-          return {
-            ...m,
-            startTime: startTime || Date.now(),
-            isWager: Boolean(m.is_wager || m.isWager || system.phase === 'phase2'),
-            teamA: teamA || { id: teamAId, name: 'Unknown', tokens: 0, status: 'idle' },
-            teamB: teamB || { id: teamBId, name: 'Unknown', tokens: 0, status: 'idle' },
-          }
-        })
-
-        const matchHistory = (historyRows || []).map((h) => ({
-          ...h,
-          winner: teamById[h.winner]?.name || h.winner,
-          loser: teamById[h.loser]?.name || h.loser,
-          isWager: Boolean(h.is_wager || h.isWager),
-          time: h.timestamp ? formatToIST(h.timestamp) : (h.created_at ? formatToIST(h.created_at) : ''),
-        }))
-
-        const notifications = (notificationRows || []).map((n) => ({
-          ...n,
-          time: n.time ? formatToIST(n.time) : (n.created_at ? formatToIST(n.created_at) : formatToIST()),
-        }))
-
-        const tokenHistoryFormatted = (tokenHistory || []).map((t) => ({
-          ...t,
-          time: t.timestamp ? formatToIST(t.timestamp) : (t.created_at ? formatToIST(t.created_at) : ''),
-        }))
-
-        // Build constraints dynamically from match history
-        const builtConstraints = buildConstraintsFromHistory(historyRows || [], teams)
-
-        const publicState = {
-          gameState: {
-            isGameActive: system.is_game_active || false,
-            isPaused: system.is_paused || false,
-            status: system.status || 'not_started',
-            phase: system.phase || 'phase1',
-            gameStartedAt: toMillis(system.game_started_at),
-            pausedAt: toMillis(system.paused_at),
-            domains: system.domains || [],
-            timeoutDurationOverride: system.timeout_duration_override || null,
-          },
-          teams,
-          matchmakingQueue,
-          activeMatches,
-          matchHistory,
-          notifications,
-          tokenHistory: tokenHistoryFormatted || [],
-          matchConstraints: builtConstraints,
-        }
-
+        const publicState = buildPublicStateSnapshot(await fetchPublicStateRows())
         useGameStateStore.getState().applyServerState(publicState)
-
-        // Auto-recovery is now handled by the realtime interval below
-
       } catch (err) {
         console.error('Failed to fetch public state from Supabase', err)
       } finally {
@@ -454,7 +353,7 @@ const useGameSocketBridge = () => {
       }
     }
 
-    const scheduleRefresh = (delay = 120) => {
+    const scheduleRefresh = (delay = PUBLIC_STATE_REFRESH_DEBOUNCE_MS) => {
       if (refreshTimeout) clearTimeout(refreshTimeout)
       refreshTimeout = setTimeout(() => {
         refreshTimeout = null
@@ -471,15 +370,14 @@ const useGameSocketBridge = () => {
     channel = supabase.channel('public-state')
     tables.forEach((t) => {
       channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
-        scheduleRefresh(120)
+        scheduleRefresh()
       })
     })
     channel.subscribe()
 
     // Fallback polling keeps UI synced even if realtime is not enabled in Supabase.
-    // Use 4s interval (was 2s) to reduce concurrent load on Supabase
     if (fallbackPollInterval) clearInterval(fallbackPollInterval)
-    fallbackPollInterval = setInterval(() => scheduleRefresh(0), 4000)
+    fallbackPollInterval = setInterval(() => scheduleRefresh(0), PUBLIC_STATE_POLL_MS)
 
     return () => {
       try {
@@ -671,23 +569,14 @@ export const useGameState = () => {
   }, [state.matchmakingQueue, myTeam])
 
   const queuePairs = useMemo(() => {
-    const queue = state.matchmakingQueue || []
-    return queue.filter((entry) => entry.matchedWith || entry.matched_with).reduce((pairs, entry) => {
-      const entryTeamId = entry.teamId || entry.team_id
-      const entryTeamName = entry.teamName || entry.team_name
-      const matchedWith = entry.matchedWith || entry.matched_with
-      const partner = queue.find((candidate) => (candidate.teamId || candidate.team_id) === matchedWith)
-      if (partner && !pairs.find((pair) => pair.teamAId === matchedWith)) {
-        pairs.push({
-          teamAId: entryTeamId,
-          teamAName: entryTeamName,
-          teamBId: partner.teamId || partner.team_id,
-          teamBName: partner.teamName || partner.team_name,
-        })
-      }
-      return pairs
-    }, [])
-  }, [state.matchmakingQueue])
+    return buildReadyQueuePairs({
+      gameState: state.gameState,
+      teams: state.teams,
+      matchmakingQueue: state.matchmakingQueue,
+      matchConstraints: state.matchConstraints,
+      activeMatches: state.activeMatches,
+    })
+  }, [state.activeMatches, state.gameState, state.matchConstraints, state.matchmakingQueue, state.teams])
 
   return {
     ...state,

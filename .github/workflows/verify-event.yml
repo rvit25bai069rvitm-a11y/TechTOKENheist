@@ -1,0 +1,32 @@
+name: Verify Event Supabase
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify-event:
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      VERIFY_SUPABASE_MUTATIONS: "1"
+      VERIFY_SUPABASE_ADMIN_USERNAME: ${{ secrets.VERIFY_SUPABASE_ADMIN_USERNAME }}
+      VERIFY_SUPABASE_ADMIN_PASSWORD: ${{ secrets.VERIFY_SUPABASE_ADMIN_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npm exec --yes playwright -- install --with-deps chromium
+
+      - name: Verify full event gate
+        run: npm run verify:event

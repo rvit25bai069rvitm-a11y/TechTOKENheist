@@ -7,7 +7,7 @@ import tokyolImg from '../../assets/icons/tokyol.png';
 import riolImg from '../../assets/icons/riol.png';
 import berlinlImg from '../../assets/icons/berlinl.png';
 import songMp3 from '../assets/song.mp3';
-import { motion, useScroll, useSpring, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import gdgLogo from '../../assets/gdg.png';
 
 const TOKEN_BURST = [
@@ -189,8 +189,8 @@ const LandingScreen = () => {
   // Darken everything heavily near the end (Section 9)
   const pitchBlackOpacity = Math.min(1, Math.max(0, (scrollY - vh * 7.5) / vh));
 
-  // Phase 2 Red shift
-  const phase2Active = scrollY > vh * 6;
+  // Phase 2 red shift fades in across the phase section instead of snapping.
+  const phase2Progress = Math.min(1, Math.max(0, (scrollY - vh * 5.55) / (vh * 0.95)));
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
   const isMobileViewport = viewportWidth <= 768;
   const safeMouseX = mousePos.x >= 0 ? mousePos.x : viewportWidth / 2;
@@ -199,22 +199,6 @@ const LandingScreen = () => {
   const rainDriftY = ((safeMouseY / vh) - 0.5) * 90;
   const rainSpeed = started ? Math.max(0.35, 1 - (scrollY / (vh * 5)) * 0.65) : 1;
   
-  // Cinematic Smooth Scroll Logic
-  const { scrollY: rawScrollY } = useScroll();
-  const smoothScrollY = useSpring(rawScrollY, {
-    damping: 35,
-    stiffness: 70,
-    mass: 1.2
-  });
-
-  const zoomThreshold = vh * 1.8;
-  
-  // Decoupled motion value for the zoom scale
-  const vaultScale = useTransform(smoothScrollY, 
-    [0, zoomThreshold, zoomThreshold + vh * 8], 
-    [0.85, 1.0, 1.5]
-  );
-
   const tokyoRevealRadius = isMobileViewport ? 260 : 360;
   const tokyoLightRadius = isMobileViewport ? 300 : 390;
   const tokyoRevealMask = `radial-gradient(${tokyoRevealRadius}px circle at ${safeMouseX}px ${safeMouseY}px, black 0%, rgba(0, 0, 0, 0.82) 24%, rgba(0, 0, 0, 0.36) 54%, transparent 100%)`;
@@ -251,19 +235,24 @@ const LandingScreen = () => {
         className="vault-bg"
         style={{
           opacity: bgOpacity,
-          filter: phase2Active ? 'brightness(0.6) sepia(1) hue-rotate(320deg) saturate(3)' : 'brightness(0.5)',
+          '--phase-red-progress': phase2Progress,
         }}
         transition={{
-          filter: { duration: 1.5, ease: "easeOut" },
           opacity: { duration: 0.8, ease: "easeOut" }
         }}
       >
-        <motion.div 
+        <div
           className="vault-bg-inner" 
           style={{ 
             backgroundImage: `url(${rvitmImg})`,
-            scale: vaultScale
           }} 
+        />
+        <div
+          className="vault-bg-inner vault-bg-inner--red"
+          style={{
+            backgroundImage: `url(${rvitmImg})`,
+          }}
+          aria-hidden="true"
         />
       </motion.div>
 

@@ -36,7 +36,8 @@ const TimeoutCountdown = ({ until }) => {
 };
 
 const BattleScreen = () => {
-  const { myTeam, currentActiveMatch, gameState, isInQueue } = useGameState();
+  const { myTeam, currentActiveMatch, gameState, isInQueue, myQueueEntry } = useGameState();
+  const myMatchedWith = myQueueEntry?.matchedWith || myQueueEntry?.matched_with || null;
 
   const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } };
@@ -181,7 +182,7 @@ const BattleScreen = () => {
       );
     }
 
-    if (myTeam?.status === 'matched') {
+    if (myMatchedWith) {
       return (
         <motion.div variants={itemVariants} className="heist-card relative overflow-hidden min-h-[450px] flex flex-col items-center justify-center p-16 text-center">
            <div className="scanline-overlay"></div>

@@ -118,7 +118,10 @@ const AdminScreen = () => {
 
   const domains = useMemo(() => gameState.domains || DEFAULT_DOMAINS, [gameState.domains]);
   const assignedProfiles = useMemo(() => new Set((teams || []).map((team) => team.name)), [teams]);
-  const finaleDomains = useMemo(() => gameState.finaleState?.finaleDomains || [], [gameState.finaleState?.finaleDomains]);
+  const finaleDomains = useMemo(
+    () => gameState.finaleState?.finaleDomains || [],
+    [gameState.finaleState?.finaleDomains]
+  );
   const currentFinaleDomain = gameState.finaleState?.currentDomain || '';
   const finaleRound = (gameState.finaleState?.currentRound || 0) + 1;
   const finaleActive = Boolean(gameState.finaleState?.isFinaleActive);
@@ -1103,7 +1106,7 @@ const AdminScreen = () => {
           <span className="heist-mono text-[10px] text-gray-400 tracking-widest uppercase">PLANS READY</span>
           <div className="flex items-center gap-2">
             <ScrollText className="text-heist-teal" size={24} />
-            <span className="heist-font text-3xl md:text-4xl text-heist-teal">{waitingQueue.length}</span>
+            <span className="heist-font text-3xl md:text-4xl text-heist-teal">{queuePairs.length}</span>
           </div>
         </div>
         <div className="panel-container border-t-2 border-heist-red p-3 flex flex-col items-center justify-center gap-1">

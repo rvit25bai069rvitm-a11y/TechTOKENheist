@@ -6,15 +6,24 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+*.local.sql
+scratch/
+test-results/
 
 node_modules
 dist
 dist-ssr
+.vercel/
 *.local
 
 # Secrets and environment
 server/serviceAccountKey.json
 .env
+.env.*
+*.env
+!.env.example
+!.env.production.local.example
+.env*.local
 
 # Editor directories and files
 .vscode/*
@@ -27,3 +36,17 @@ server/serviceAccountKey.json
 *.sln
 *.sw?
 server/serviceAccountKey.json
+
+# One-off local artifacts that are not Vite build inputs
+.agents/
+.claude/
+.codex-run/
+.kiro/
+.trae/
+.windsurf/
+supabase/.temp/
+admin-panel-mock.html
+Create_a_hyper_cinematic_D_im.mp4
+TechTokenHeist_Rulebook (1).docx
+security_audit_report.md
+security_audit_report.md.resolved

@@ -1,0 +1,34 @@
+name: Verify Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      production_url:
+        description: Public event URL to verify.
+        required: false
+        default: https://tech-token-heist-one.vercel.app
+      expected_supabase_url:
+        description: Optional expected https://<project-ref>.supabase.co URL.
+        required: false
+
+jobs:
+  verify-production-deploy:
+    runs-on: ubuntu-latest
+    env:
+      PRODUCTION_URL: ${{ inputs.production_url }}
+      EXPECTED_SUPABASE_URL: ${{ inputs.expected_supabase_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify public production deployment
+        run: npm run verify:production-deploy

@@ -116,6 +116,18 @@ const normalizeTeam = (team) => ({
     lastTokenUpdateTime: team?.last_token_update_time ?? team?.lastTokenUpdateTime ?? 0,
 });
 
+const toPublicTeamSnapshot = (team) => ({
+    id: team?.id,
+    name: team?.name,
+    member_names: team?.member_names,
+    leader: team?.leader,
+    status: team?.status || 'idle',
+    tokens: team?.tokens ?? 1,
+    total_time: team?.total_time ?? team?.totalTime ?? 0,
+    timeout_until: team?.timeout_until ?? team?.timeoutUntil ?? null,
+    last_token_update_time: team?.last_token_update_time ?? team?.lastTokenUpdateTime ?? null,
+});
+
 const enforceWagerEliminations = async () => {
     const zeroTokenTeams = await queryList(
         supabaseAdmin
@@ -318,8 +330,8 @@ const autoMatchPairs = async () => {
                 team_b: p.teamBId,
                 domain,
                 start_time: Date.now(),
-                teamA: teamA,
-                teamB: teamB
+                teamA: toPublicTeamSnapshot(teamA),
+                teamB: toPublicTeamSnapshot(teamB)
             }]);
 
             // 2. Set team statuses to 'fighting'
@@ -677,6 +689,7 @@ serve(async (req) => {
                                 team_id: teamId,
                                 team_name: name,
                                 team_tokens: payloadData.tokens ?? 1,
+                                phase: system?.phase || 'phase1',
                             },
                         ]);
                     }
@@ -802,7 +815,14 @@ serve(async (req) => {
                 const match = await querySingle(
                     supabaseAdmin
                         .from('active_matches')
-                        .insert([{ team_a: teamAId, team_b: teamBId, domain, start_time: Date.now(), teamA, teamB }])
+                        .insert([{
+                            team_a: teamAId,
+                            team_b: teamBId,
+                            domain,
+                            start_time: Date.now(),
+                            teamA: toPublicTeamSnapshot(teamA),
+                            teamB: toPublicTeamSnapshot(teamB),
+                        }])
                         .select()
                         .maybeSingle()
                 );

@@ -30,6 +30,7 @@ const MatchStartOverlay = () => {
   const [showAnnouncement, setShowAnnouncement] = useState(true);
   const [showSubtitles, setShowSubtitles] = useState(false);
   const [flashActive, setFlashActive] = useState(false);
+  const [timerPulse, setTimerPulse] = useState(false);
   const audioRef = useRef(null);
   const timerRef = useRef(null);
   const audioPlayedRef = useRef(false);
@@ -72,6 +73,7 @@ const MatchStartOverlay = () => {
         audioPlayedRef.current = false;
         flashPlayedRef.current = false;
         timerPulseRef.current = false;
+        setTimerPulse(false);
 
         if (timerRef.current) cancelAnimationFrame(timerRef.current);
         clearPendingTimeouts();
@@ -97,6 +99,7 @@ const MatchStartOverlay = () => {
 
           if (currentElapsed >= 6000 && !timerPulseRef.current) {
             timerPulseRef.current = true;
+            setTimerPulse(true);
           }
 
           if (currentElapsed >= 7000) {
@@ -147,6 +150,7 @@ const MatchStartOverlay = () => {
       audioPlayedRef.current = false;
       flashPlayedRef.current = false;
       timerPulseRef.current = false;
+      setTimerPulse(false);
       if (timerRef.current) cancelAnimationFrame(timerRef.current);
       clearPendingTimeouts();
     }
@@ -160,7 +164,7 @@ const MatchStartOverlay = () => {
   if (!active || isFinished) return null;
 
   return (
-    <div className={`match-start-overlay ${isTearing ? 'tearing' : ''} ${phase === 2 ? 'void-mode' : ''} ${timerPulseRef.current ? 'pulse-timer' : ''}`}>
+    <div className={`match-start-overlay ${isTearing ? 'tearing' : ''} ${phase === 2 ? 'void-mode' : ''} ${timerPulse ? 'pulse-timer' : ''}`}>
       <audio ref={audioRef} src={new URL('../../assets/anant.mp3', import.meta.url).href} />
 
       <div className="background-container" />
