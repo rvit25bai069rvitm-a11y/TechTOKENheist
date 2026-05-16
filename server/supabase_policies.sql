@@ -148,13 +148,43 @@ alter table public.system add column if not exists timeout_duration_override big
 alter table public.system add column if not exists domains text[] not null default array['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition'];
 alter table public.system add column if not exists finale_state jsonb;
 
-insert into public.system (key, status, is_game_active, is_paused, phase, domains)
-values ('game', 'not_started', false, false, 'phase1', array['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition'])
+insert into public.system (key, status, is_game_active, is_paused, phase)
+values ('game', 'not_started', false, false, 'phase1')
 on conflict (key) do nothing;
 
 insert into public.system (key, status)
 values ('admin_credential', null)
 on conflict (key) do nothing;
+
+do $$
+declare
+  default_domains text[] := array['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition'];
+  domains_type text;
+begin
+  select format_type(attribute.atttypid, attribute.atttypmod)
+  into domains_type
+  from pg_attribute attribute
+  join pg_class class on class.oid = attribute.attrelid
+  join pg_namespace namespace on namespace.oid = class.relnamespace
+  where namespace.nspname = 'public'
+    and class.relname = 'system'
+    and attribute.attname = 'domains'
+    and not attribute.attisdropped;
+
+  if domains_type = 'jsonb' then
+    execute $sql$
+      update public.system
+      set domains = $1::jsonb
+      where key = 'game' and domains is null
+    $sql$ using to_jsonb(default_domains);
+  else
+    execute $sql$
+      update public.system
+      set domains = $1::text[]
+      where key = 'game' and domains is null
+    $sql$ using default_domains;
+  end if;
+end $$;
 
 drop trigger if exists active_matches_sync_team_status on public.active_matches;
 drop trigger if exists active_matches_clear_queue_rows on public.active_matches;
