@@ -390,6 +390,39 @@ test('runMatchmaking randomized invariant sweep returns only valid disjoint pair
   }
 })
 
+test('runMatchmaking handles a 35-team event queue without duplicate assignments', () => {
+  const teams = Array.from({ length: 35 }, (_, index) => ({
+    id: `team-${index + 1}`,
+    name: `Team ${String(index + 1).padStart(2, '0')}`,
+    tokens: (index % 4) + 1,
+    status: 'queued',
+  }))
+
+  const startedAt = performance.now()
+  const pairs = runMatchmaking({
+    gameState: {
+      phase: 'phase1',
+      domains: ['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition'],
+    },
+    teams,
+    matchConstraints: {},
+    existingMatches: [],
+  })
+  const elapsedMs = performance.now() - startedAt
+  const assignedTeamIds = new Set()
+
+  assert.equal(pairs.length, 17)
+  assert.ok(elapsedMs < 500, `35-team matchmaking took ${elapsedMs.toFixed(1)}ms`)
+
+  for (const pair of pairs) {
+    assert.notEqual(pair.teamAId, pair.teamBId)
+    assert.equal(assignedTeamIds.has(pair.teamAId), false, `${pair.teamAId} assigned twice`)
+    assert.equal(assignedTeamIds.has(pair.teamBId), false, `${pair.teamBId} assigned twice`)
+    assignedTeamIds.add(pair.teamAId)
+    assignedTeamIds.add(pair.teamBId)
+  }
+})
+
 test('queue pairs require reciprocal matched_with rows and report stale links', () => {
   const matchmakingQueue = [
     { team_id: 'alpha', team_name: 'Alpha', matched_with: 'bravo' },
