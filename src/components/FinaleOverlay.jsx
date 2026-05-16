@@ -76,21 +76,23 @@ const RoundTracker = ({ finaleResults, currentRound }) => {
   );
 };
 
-const FinaleRoundTimer = ({ startTime, className = '' }) => {
+const FinaleRoundTimer = ({ startTime, isPaused = false, pausedAt = null, className = '' }) => {
   const [display, setDisplay] = useState('0:00');
 
   useEffect(() => {
     if (!startTime) return;
     const tick = () => {
-      const ms = Date.now() - startTime;
+      const effectiveNow = isPaused && pausedAt ? pausedAt : Date.now();
+      const ms = Math.max(0, effectiveNow - startTime);
       const mins = Math.floor(ms / 60000);
       const secs = Math.floor((ms % 60000) / 1000);
       setDisplay(`${mins}:${String(secs).padStart(2, '0')}`);
     };
     tick();
+    if (isPaused) return undefined;
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [startTime]);
+  }, [startTime, isPaused, pausedAt]);
 
   if (!startTime) return null;
   return <span className={`finale-timer-value ${className}`}>{display}</span>;
@@ -99,9 +101,6 @@ const FinaleRoundTimer = ({ startTime, className = '' }) => {
 /* ─── Main Finale Overlay ─── */
 const FinaleOverlay = () => {
   const { gameState, user, myTeam } = useGameState();
-  const [shaking, setShaking] = useState(false);
-  const [prevRound, setPrevRound] = useState(-1);
-
   const finaleState = gameState.finaleState;
 
   // Don't show if no finale active or admin view
@@ -128,15 +127,6 @@ const FinaleOverlay = () => {
     : 'Battle feed locked. Witness the finalists in the arena.';
   const lockTag = isFinalist ? 'FIGHT FOR THE CROWN' : 'WITNESS THE ARENA SHOWDOWN';
 
-  // Screen shake on round change
-  useEffect(() => {
-    if (currentRound !== prevRound && currentRound > 0) {
-      setShaking(true);
-      setTimeout(() => setShaking(false), 500);
-      setPrevRound(currentRound);
-    }
-  }, [currentRound, prevRound]);
-
   // Victory screen
   if (finaleWinner) {
     const winnerName = finaleWinner === 'a' ? teamAName : teamBName;
@@ -151,8 +141,10 @@ const FinaleOverlay = () => {
     );
   }
 
+  const shakeClass = currentRound > 0 ? 'finale-shake' : '';
+
   return (
-    <div className={`finale-overlay ${shaking ? 'finale-shake' : ''} ${roleClass}`}>
+    <div className={`finale-overlay ${shakeClass} ${roleClass}`}>
       <div className="finale-bg-grid" />
       <div className="finale-bg-radial" />
       <div className="finale-scanlines" />
@@ -236,7 +228,7 @@ const FinaleOverlay = () => {
             {roundStartedAt && (
               <div className="finale-domain-timer">
                 <span className="finale-domain-timer-label">ROUND TIMER</span>
-                <FinaleRoundTimer startTime={roundStartedAt} className="finale-domain-timer-value" />
+                <FinaleRoundTimer startTime={roundStartedAt} isPaused={gameState.isPaused} pausedAt={gameState.pausedAt} className="finale-domain-timer-value" />
               </div>
             )}
           </div>
@@ -276,7 +268,7 @@ const FinaleOverlay = () => {
           {roundStartedAt && (
             <div className="finale-info-item">
               <span className="finale-info-label">TIMER</span>
-              <FinaleRoundTimer startTime={roundStartedAt} className="finale-info-value" />
+              <FinaleRoundTimer startTime={roundStartedAt} isPaused={gameState.isPaused} pausedAt={gameState.pausedAt} className="finale-info-value" />
             </div>
           )}
         </div>

@@ -5,7 +5,7 @@ import { Swords, Crosshair, Ban, Lock, Zap, Search, Timer, ShieldAlert, AlertCir
 import { buildQueueDiagnostics } from '../utils/matchmaking';
 
 const ArenaScreen = () => {
-  const { teams, activeMatches, myTeam, gameState, isInQueue, myQueueEntry, joinQueue, matchmakingQueue, matchConstraints } = useGameState();
+  const { teams, activeMatches, myTeam, gameState, isInQueue, myQueueEntry, matchmakingQueue, matchConstraints } = useGameState();
   const amIEliminated = myTeam && myTeam.status === 'eliminated';
   const amITimeout = myTeam && myTeam.status === 'timeout';
   const isPaused = gameState.isPaused;
@@ -62,7 +62,7 @@ const ArenaScreen = () => {
             <div className="flex flex-col">
               <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest mb-1">CURRENT SECTOR</span>
               <span className={`heist-font text-2xl tracking-widest uppercase ${isPhase2 ? 'text-red-500' : 'text-gray-300'}`}>
-                {isPhase2 ? 'PHASE 2: WAGER' : 'PHASE 1: STANDARD'}
+                {isPhase2 ? 'WAGER MODE' : 'PHASE 1: STANDARD'}
               </span>
             </div>
             {isPhase2 ? <Zap className="text-red-500 animate-pulse" size={24} /> : <ShieldAlert className="text-gray-400" size={24} />}

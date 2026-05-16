@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { queryClient } from '../lib/queryClient'
 import supabase, { hasSupabaseConfig } from '../lib/supabase'
-import { buildConstraintsFromHistory, getValidDomains, runMatchmaking } from '../utils/matchmaking'
+import { buildConstraintsFromHistory } from '../utils/matchmaking'
 import { getProfileAvatar } from '../data/profileAvatars'
 
 const createInitialGameState = () => ({
@@ -28,8 +28,18 @@ const createInitialClientState = () => ({
 const formatToIST = (value) => {
   try {
     const d = value ? new Date(value) : new Date()
-    return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Kolkata' }).format(d)
-  } catch (e) {
+    return new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Kolkata',
+      timeZoneName: 'short',
+    }).format(d)
+  } catch {
     try { return new Date(value || Date.now()).toLocaleString() } catch { return String(value) }
   }
 }
@@ -80,47 +90,6 @@ const toMillis = (value) => {
   }
   const parsed = Date.parse(value)
   return Number.isNaN(parsed) ? null : parsed
-}
-
-const upsertTeamRecord = async (teamData) => {
-  try {
-    const { data: existing } = await supabase.from('teams').select('id, name').ilike('name', teamData.name).limit(1).maybeSingle()
-
-    const payload = {
-      name: teamData.name,
-      member_names: teamData.memberNames || [teamData.name],
-      leader: teamData.leader || (teamData.memberNames?.[0]) || teamData.name,
-      password: teamData.password || 'password123',
-      tokens: teamData.tokens ?? 1,
-      status: teamData.status || 'idle'
-    }
-
-    if (existing?.id) {
-      const { error } = await supabase.from('teams').update(payload).eq('id', existing.id)
-      if (error) {
-        console.error('Update error:', error)
-        // Fallback update if some columns are missing
-        await supabase.from('teams').update({ tokens: payload.tokens, status: payload.status }).eq('id', existing.id)
-      }
-      return existing.id
-    }
-
-    const { data: inserted, error: insertError } = await supabase.from('teams').insert([payload]).select().maybeSingle()
-    if (insertError) {
-      console.error('Insert error:', insertError)
-      // Fallback insert if columns are missing
-      const { data: fallback, error: fallbackError } = await supabase.from('teams').insert([{ name: payload.name, tokens: payload.tokens }]).select().maybeSingle()
-      if (fallbackError) {
-        console.error('Fallback insert error:', fallbackError)
-        return null
-      }
-      return fallback?.id
-    }
-    return inserted?.id
-  } catch (err) {
-    console.error('upsertTeamRecord fatal error:', err)
-    return null
-  }
 }
 
 const syncQueryCache = (snapshot) => {
@@ -226,12 +195,14 @@ const useGameStateStore = create(
                       if (body && (body.error || body.message)) {
                         errorMessage = body.error || body.message;
                       }
-                    } catch (e) {
+                    } catch {
                       // If JSON parsing fails, try text
                       try {
                         const text = await error.context.text();
                         if (text && text.length < 200) errorMessage = text;
-                      } catch (e2) { }
+                      } catch {
+                        // Keep the original Supabase error message.
+                      }
                     }
                   }
 
@@ -263,7 +234,11 @@ const useGameStateStore = create(
 
                 // Fire-and-forget: kick off a refetch but don't wait for it
                 // This prevents _invoke from hanging if the refetch is slow/blocked
-                try { get().triggerFetchPublicState?.() } catch { }
+                try {
+                  get().triggerFetchPublicState?.()
+                } catch {
+                  // Refetch is best-effort after a mutation.
+                }
 
                 return { success: true, data: data?.data }
               } catch (fetchErr) {
@@ -417,7 +392,7 @@ const useGameSocketBridge = () => {
           return {
             ...m,
             startTime: startTime || Date.now(),
-            isWager: Boolean(m.is_wager || m.isWager),
+            isWager: Boolean(m.is_wager || m.isWager || system.phase === 'phase2'),
             teamA: teamA || { id: teamAId, name: 'Unknown', tokens: 0, status: 'idle' },
             teamB: teamB || { id: teamBId, name: 'Unknown', tokens: 0, status: 'idle' },
           }

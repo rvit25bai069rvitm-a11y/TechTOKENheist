@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGameState } from '../hooks/useGameState';
 import './MatchStartOverlay.css';
 
