@@ -25,6 +25,15 @@ const createInitialClientState = () => ({
   hasHydrated: false,
 })
 
+const formatToIST = (value) => {
+  try {
+    const d = value ? new Date(value) : new Date()
+    return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Kolkata' }).format(d)
+  } catch (e) {
+    try { return new Date(value || Date.now()).toLocaleString() } catch { return String(value) }
+  }
+}
+
 let countdownInterval = null
 let timerInterval = null
 let fallbackPollInterval = null
@@ -209,7 +218,7 @@ const useGameStateStore = create(
 
                 if (error) {
                   let errorMessage = error.message;
-                  
+
                   // Extract detailed error from response body if possible
                   if (error.context && typeof error.context.json === 'function') {
                     try {
@@ -222,7 +231,7 @@ const useGameStateStore = create(
                       try {
                         const text = await error.context.text();
                         if (text && text.length < 200) errorMessage = text;
-                      } catch (e2) {}
+                      } catch (e2) { }
                     }
                   }
 
@@ -419,11 +428,17 @@ const useGameSocketBridge = () => {
           winner: teamById[h.winner]?.name || h.winner,
           loser: teamById[h.loser]?.name || h.loser,
           isWager: Boolean(h.is_wager || h.isWager),
+          time: h.timestamp ? formatToIST(h.timestamp) : (h.created_at ? formatToIST(h.created_at) : ''),
         }))
 
         const notifications = (notificationRows || []).map((n) => ({
           ...n,
-          time: n.time || (n.created_at ? new Date(n.created_at).toLocaleTimeString() : new Date().toLocaleTimeString()),
+          time: n.time ? formatToIST(n.time) : (n.created_at ? formatToIST(n.created_at) : formatToIST()),
+        }))
+
+        const tokenHistoryFormatted = (tokenHistory || []).map((t) => ({
+          ...t,
+          time: t.timestamp ? formatToIST(t.timestamp) : (t.created_at ? formatToIST(t.created_at) : ''),
         }))
 
         // Build constraints dynamically from match history
@@ -445,7 +460,7 @@ const useGameSocketBridge = () => {
           activeMatches,
           matchHistory,
           notifications,
-          tokenHistory: tokenHistory || [],
+          tokenHistory: tokenHistoryFormatted || [],
           matchConstraints: builtConstraints,
         }
 

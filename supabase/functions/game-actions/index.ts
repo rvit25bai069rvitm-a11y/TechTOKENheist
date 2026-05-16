@@ -101,7 +101,7 @@ const getGameSystem = async () => ensureGameSystem();
 const insertNotification = async (message) => {
     try {
         await supabaseAdmin.from('notifications').insert([
-            { message, time: new Date().toLocaleTimeString() },
+            { message, time: new Date().toISOString() },
         ]);
     } catch {
         // Best-effort notifications.
@@ -138,7 +138,7 @@ const enforceWagerEliminations = async () => {
         await supabaseAdmin.from('notifications').insert(
             zeroTokenTeams.map((team) => ({
                 message: `${team.name} eliminated in WAGER mode (0 tokens).`,
-                time: new Date().toLocaleTimeString(),
+                time: new Date().toISOString(),
             }))
         );
     } catch {
@@ -229,12 +229,12 @@ const autoMatchPairs = async () => {
             const teamB = teams.find((t) => t.id === p.teamBId);
 
             // Get valid domains for this pair
-            const validDomains = getValidDomains({ 
-                teamA, 
-                teamB, 
-                matchConstraints: constraints, 
-                allDomains, 
-                phase: 'phase2' 
+            const validDomains = getValidDomains({
+                teamA,
+                teamB,
+                matchConstraints: constraints,
+                allDomains,
+                phase: 'phase2'
             });
 
             // Pick a domain with variety preference
@@ -788,8 +788,8 @@ serve(async (req) => {
 
                 try {
                     await supabaseAdmin.from('token_history').insert([
-                        { team: winnerTeam.name, change: `+${winDelta}`, reason: isWager ? 'Wager win' : 'Match win', timestamp: new Date().toLocaleTimeString() },
-                        { team: loserTeam.name, change: `${loseDelta}`, reason: isWager ? 'Wager loss' : 'Match loss', timestamp: new Date().toLocaleTimeString() },
+                        { team: winnerTeam.name, change: `+${winDelta}`, reason: isWager ? 'Wager win' : 'Match win', timestamp: new Date().toISOString() },
+                        { team: loserTeam.name, change: `${loseDelta}`, reason: isWager ? 'Wager loss' : 'Match loss', timestamp: new Date().toISOString() },
                     ]);
                 } catch {
                     // Best-effort history.
@@ -803,24 +803,24 @@ serve(async (req) => {
 
                 try {
                     await supabaseAdmin.from('match_history').insert([
-                        { 
-                            id: `mh_${matchId}`, 
-                            winner: winnerTeam.name, 
-                            loser: loserTeam.name, 
-                            domain: match.domain, 
-                            timestamp: new Date().toLocaleTimeString(), 
+                        {
+                            id: `mh_${matchId}`,
+                            winner: winnerTeam.name,
+                            loser: loserTeam.name,
+                            domain: match.domain,
+                            timestamp: new Date().toISOString(),
                             is_wager: isWager,
                             phase: sysCheck?.phase || 'phase1'
                         },
                     ]);
                 } catch {
                     await supabaseAdmin.from('match_history').insert([
-                        { 
-                            id: `mh_${matchId}`, 
-                            winner: winnerTeam.name, 
-                            loser: loserTeam.name, 
-                            domain: match.domain, 
-                            timestamp: new Date().toLocaleTimeString(),
+                        {
+                            id: `mh_${matchId}`,
+                            winner: winnerTeam.name,
+                            loser: loserTeam.name,
+                            domain: match.domain,
+                            timestamp: new Date().toISOString(),
                             phase: sysCheck?.phase || 'phase1'
                         },
                     ]);
@@ -876,14 +876,14 @@ serve(async (req) => {
 
                 const teamA = teams.find((t) => t.id === match.team_a);
                 const teamB = teams.find((t) => t.id === match.team_b);
-                
+
                 // Get valid domains considering team history and phase
-                const validDomains = getValidDomains({ 
-                    teamA, 
-                    teamB, 
-                    matchConstraints: constraints, 
-                    allDomains, 
-                    phase: system?.phase 
+                const validDomains = getValidDomains({
+                    teamA,
+                    teamB,
+                    matchConstraints: constraints,
+                    allDomains,
+                    phase: system?.phase
                 });
 
                 let domain = preferredDomain;
@@ -895,11 +895,11 @@ serve(async (req) => {
                         const activeDomains = (activeMatches || [])
                             .map(m => m.domain)
                             .filter(d => d && d !== 'TBD');
-                        
+
                         // Try to pick a domain that isn't currently active in another match
                         const uniqueValid = validDomains.filter(d => !activeDomains.includes(d));
                         const choices = uniqueValid.length > 0 ? uniqueValid : validDomains;
-                        
+
                         domain = choices[Math.floor(Math.random() * choices.length)];
                     } else {
                         // Fallback
