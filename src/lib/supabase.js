@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY
 export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseKey)
 const missingSupabaseConfig = !hasSupabaseConfig
 
@@ -48,7 +48,7 @@ const createNoopSupabaseClient = () => ({
 })
 
 if (missingSupabaseConfig) {
-  console.warn('VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set in .env; using local no-op Supabase client.')
+  console.warn('VITE_SUPABASE_URL and a Vite Supabase key are not set in .env; using local no-op Supabase client.')
 }
 
 export const supabase = missingSupabaseConfig

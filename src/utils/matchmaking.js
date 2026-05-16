@@ -75,14 +75,15 @@ export function getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints
   const cA = c[teamA.id] || {}
   const cB = c[teamB.id] || {}
   const tokenDiff = Math.abs((teamA.tokens || 0) - (teamB.tokens || 0))
+  const isPhase2 = gameState?.phase === 'phase2'
 
   // Phase 1: ±3 token range limit
-  if (gameState?.phase !== 'phase2' && tokenDiff > 3) {
+  if (!isPhase2 && tokenDiff > 3) {
     reasons.push(`Token gap too high: ${teamA.tokens} vs ${teamB.tokens} (diff ${tokenDiff}, max 3)`)
   }
 
-  // Max 2 times against same opponent (both phases)
-  if ((cA.opponents?.[teamB.id] || 0) >= 2) {
+  // Phase 1: max 2 times against the same opponent.
+  if (!isPhase2 && (cA.opponents?.[teamB.id] || 0) >= 2) {
     reasons.push('Already faced each other 2 times (max reached)')
   }
 
@@ -102,13 +103,15 @@ export function getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints
  *  - Same opponent + same domain → only 1 time
  *  - No consecutive repeat domain (Phase 2 explicitly, good practice for Phase 1 too)
  */
-export function getValidDomains({ teamA, teamB, matchConstraints, allDomains }) {
+export function getValidDomains({ teamA, teamB, matchConstraints, allDomains, phase }) {
   const domains = allDomains || ['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition']
   const c = matchConstraints || {}
   const cA = c[teamA?.id] || {}
   const cB = c[teamB?.id] || {}
+  const isPhase2 = phase === 'phase2'
 
   return domains.filter(domain => {
+    if (!isPhase2) {
     // Same domain max 2 times per team
     if ((cA.domains?.[domain] || 0) >= 2) return false
     if ((cB.domains?.[domain] || 0) >= 2) return false
@@ -118,6 +121,7 @@ export function getValidDomains({ teamA, teamB, matchConstraints, allDomains }) 
     const comboKeyB = `${teamA?.id}::${domain}`
     if ((cA.combos?.[comboKeyA] || 0) >= 1) return false
     if ((cB.combos?.[comboKeyB] || 0) >= 1) return false
+    }
 
     // No consecutive repeat domain for either team
     if (cA.lastDomain === domain) return false

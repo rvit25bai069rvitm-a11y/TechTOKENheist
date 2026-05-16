@@ -381,7 +381,7 @@ const LandingScreen = () => {
               <p className="cinematic-line p1-l3 mt-2 dw-card__text">Predictable.</p>
             </div>
             <div className="phase-2-block">
-              <h2 className="phase-title text-red glitch dw-card__display--single" data-text="Phase 2">Phase 2</h2>
+              <h2 className="phase-title text-red glitch dw-card__display--single" data-text="Wager Mode">Wager Mode</h2>
               <p className="cinematic-line p2-l1 mt-4 dw-card__text">Constraints removed.</p>
               <p className="cinematic-line p2-l2 mt-2 dw-card__text">Risk amplified.</p>
               <p className="cinematic-line p2-l3 mt-12 text-red glow-text dw-card__text">Loss is permanent.</p>

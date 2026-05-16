@@ -9,23 +9,27 @@ import {
 import DomainWheel from '../components/DomainWheel';
 import { buildQueueDiagnostics } from '../utils/matchmaking';
 import { PROFILE_AVATARS, DEFAULT_PROFILE_NAME, getProfileAvatar, getProfileLabel } from '../data/profileAvatars';
+import { DEFAULT_TEAM_NAMES, DEFAULT_TEAM_PASSWORD } from '../data/defaultTeams';
 import './AdminScreen.css';
 
 const CUSTOM_PROFILE_VALUE = '__custom__';
+const DEFAULT_DOMAINS = ['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition'];
 
-const MatchTimer = ({ startTime }) => {
+const MatchTimer = ({ startTime, isPaused = false, pausedAt = null }) => {
   const [display, setDisplay] = useState('0:00');
   useEffect(() => {
     const tick = () => {
-      const ms = Date.now() - startTime;
+      const effectiveNow = isPaused && pausedAt ? pausedAt : Date.now();
+      const ms = Math.max(0, effectiveNow - startTime);
       const mins = Math.floor(ms / 60000);
       const secs = Math.floor((ms % 60000) / 1000);
       setDisplay(`${mins}:${String(secs).padStart(2, '0')}`);
     };
     tick();
+    if (isPaused) return undefined;
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [startTime]);
+  }, [startTime, isPaused, pausedAt]);
   return <div className="heist-mono text-heist-yellow">{display}</div>;
 };
 
@@ -51,10 +55,9 @@ const AdminScreen = () => {
     notifications, queuePairs, matchConstraints,
     startGame, stopGame, resetGame, togglePhase, createTeam, deleteTeam,
     updateTokens, createMatch, declareWinner, spinDomain, updateDomains, setTimeoutDuration,
-    enrollAllEligible, autoMatchPairs,
+    enrollAllEligible,
     endMatchAndStartFinale, setFinaleDomain,
     declareFinaleRoundWinner, endFinale,
-    triggerFetchPublicState,
     _invoke
   } = useGameState();
 
@@ -81,7 +84,7 @@ const AdminScreen = () => {
   const [tab, setTab] = useState('teams');
   const [selectedProfile, setSelectedProfile] = useState(() => PROFILE_AVATARS[0]?.name || '');
   const [customTeamName, setCustomTeamName] = useState('');
-  const [teamPassword, setTeamPassword] = useState('');
+  const [teamPassword, setTeamPassword] = useState(DEFAULT_TEAM_PASSWORD);
   const [memberInput, setMemberInput] = useState('');
   const [memberNames, setMemberNames] = useState([]);
   const [leader, setLeader] = useState('');
@@ -113,9 +116,9 @@ const AdminScreen = () => {
   const [timeoutInput, setTimeoutInput] = useState('');
   const [selectedFinaleDomain, setSelectedFinaleDomain] = useState('');
 
-  const domains = gameState.domains || ['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition'];
+  const domains = useMemo(() => gameState.domains || DEFAULT_DOMAINS, [gameState.domains]);
   const assignedProfiles = useMemo(() => new Set((teams || []).map((team) => team.name)), [teams]);
-  const finaleDomains = gameState.finaleState?.finaleDomains || [];
+  const finaleDomains = useMemo(() => gameState.finaleState?.finaleDomains || [], [gameState.finaleState?.finaleDomains]);
   const currentFinaleDomain = gameState.finaleState?.currentDomain || '';
   const finaleRound = (gameState.finaleState?.currentRound || 0) + 1;
   const finaleActive = Boolean(gameState.finaleState?.isFinaleActive);
@@ -152,11 +155,20 @@ const AdminScreen = () => {
     if (!leader) { alert('Select a crew leader from the dropdown'); return; }
 
     safeAction('createTeam', () => createTeam({ name: teamName, memberNames, leader, password: teamPassword }));
-    setTeamPassword('');
+    setTeamPassword(DEFAULT_TEAM_PASSWORD);
     setCustomTeamName('');
     setMemberInput('');
     setMemberNames([]);
     setLeader('');
+  };
+
+  const handleCreateDefaultTeams = () => {
+    setConfirmConfig({
+      title: 'CREATE 28 TEAMS',
+      message: `This will create or refresh ${DEFAULT_TEAM_NAMES.length} teams (${DEFAULT_TEAM_NAMES[0]}-${DEFAULT_TEAM_NAMES.at(-1)}) with reset password ${DEFAULT_TEAM_PASSWORD}. Existing matching team names will be updated.`,
+      type: 'success',
+      onConfirm: () => safeAction('createDefaultTeams', () => _invoke('createDefaultTeams')),
+    });
   };
 
   const selectedProfileLabel = selectedProfile === CUSTOM_PROFILE_VALUE
@@ -249,7 +261,7 @@ const AdminScreen = () => {
         <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
           <div className="flex items-center gap-2 border border-heist-teal px-4 py-2 bg-black bg-opacity-70 shadow-inner flex-1 justify-center md:flex-none">
             <span className="heist-font text-heist-teal tracking-widest text-lg md:text-xl">
-              {gameState.phase === 'phase2' ? 'PHASE 2 — WAGER' : 'PHASE 1 — INFILTRATION'}
+              {gameState.phase === 'phase2' ? 'WAGER MODE' : 'PHASE 1 - INFILTRATION'}
             </span>
             <Banknote className="text-heist-teal" size={20} />
           </div>
@@ -294,7 +306,7 @@ const AdminScreen = () => {
               {actionInProgress === 'stopGame' ? 'HOLDING...' : 'ON HOLD'}
             </button>
             <button className="px-6 py-2 bg-heist-teal text-black heist-font text-xl tracking-wider flex items-center gap-2 min-w-[120px]">
-              PHASE {gameState.phase === 'phase2' ? '2' : '1'} <Banknote size={20} />
+              {gameState.phase === 'phase2' ? 'WAGER MODE' : 'PHASE 1'} <Banknote size={20} />
             </button>
             <button
               className={`px-6 py-2 heist-font text-xl tracking-wider flex items-center gap-2 min-w-[160px] transition-colors ${gameState.isGameActive && !gameState.isPaused ? 'bg-heist-yellow text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'} ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
@@ -314,7 +326,7 @@ const AdminScreen = () => {
               className={`border border-heist-red text-heist-red px-6 py-1 heist-font text-lg hover:bg-heist-red hover:text-black transition-colors ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
               onClick={() => setConfirmConfig({
                 title: 'RESET PARAMETERS',
-                message: 'This will reset all team tokens and status. This action is irreversible!',
+                message: `This will reset tokens/status, clear queues and active matches, and set every team password to ${DEFAULT_TEAM_PASSWORD}. This action is irreversible!`,
                 type: 'danger',
                 onConfirm: () => safeAction('resetGame', resetGame)
               })}
@@ -361,7 +373,7 @@ const AdminScreen = () => {
           </div>
           <div className="flex flex-col">
             <div className="heist-font text-2xl tracking-wider text-white">
-              {gameState.phase === 'phase2' ? 'PHASE 2 — WAGER MODE' : 'PHASE 1 — INFILTRATION'}
+              {gameState.phase === 'phase2' ? 'WAGER MODE' : 'PHASE 1 - INFILTRATION'}
             </div>
             <div className="heist-mono text-sm text-gray-400 mt-1">
               Queue match: Vault 13A infiltration. Stake: {gameState.phase === 'phase2' ? 'Winner takes all' : '+1/-1 TKN'}. Timeout: {gameState.timeoutDurationOverride ? gameState.timeoutDurationOverride / 60000 : 15} minutes.
@@ -378,14 +390,14 @@ const AdminScreen = () => {
         <button
           className={`bg-heist-teal text-black px-6 py-2 heist-font text-xl flex items-center justify-center gap-2 hover:bg-white transition-colors w-full md:w-auto flex-shrink-0 ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
           onClick={() => setConfirmConfig({
-            title: gameState.phase === 'phase2' ? 'REVERT TO PHASE 1' : 'INITIATE PHASE 2',
-            message: gameState.phase === 'phase2' ? 'Switch back to standard match mode?' : 'Switch to WAGER mode? This will reset match history and enable high-stakes eliminations.',
+            title: gameState.phase === 'phase2' ? 'REVERT TO PHASE 1' : 'INITIATE WAGER MODE',
+            message: gameState.phase === 'phase2' ? 'Switch back to standard match mode?' : 'Switch to Wager Mode? This resets queue and active matches immediately, then rematches eligible teams by Wager Mode rules.',
             type: 'warning',
             onConfirm: () => safeAction('togglePhase', togglePhase)
           })}
           disabled={!!actionInProgress}
         >
-          {actionInProgress === 'togglePhase' ? 'SWITCHING...' : (gameState.phase === 'phase2' ? 'REVERT PHASE' : 'INITIATE PHASE 2')} <Bomb size={20} />
+          {actionInProgress === 'togglePhase' ? 'SWITCHING...' : (gameState.phase === 'phase2' ? 'REVERT PHASE' : 'INITIATE WAGER MODE')} <Bomb size={20} />
         </button>
       </div>
 
@@ -413,6 +425,24 @@ const AdminScreen = () => {
               <Fingerprint className="absolute -right-10 top-10 w-64 h-64 text-heist-teal opacity-10 pointer-events-none" />
               <h3 className="heist-font text-heist-teal text-3xl mb-2 tracking-wider">ASSIGN PROFILE</h3>
               <p className="heist-mono text-gray-400 text-xs uppercase mb-6">One crew per predefined avatar, or use Custom with default profile.</p>
+              <div className="border border-heist-yellow bg-black bg-opacity-70 p-4 mb-5 relative z-10">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <div className="heist-font text-heist-yellow text-xl tracking-wider">DEFAULT ROSTER</div>
+                    <div className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">
+                      {DEFAULT_TEAM_NAMES.length} teams. Reset password: <span className="text-heist-yellow">{DEFAULT_TEAM_PASSWORD}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`border border-heist-yellow text-heist-yellow px-4 py-2 heist-font text-lg hover:bg-heist-yellow hover:text-black transition-colors ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
+                    onClick={handleCreateDefaultTeams}
+                    disabled={!!actionInProgress}
+                  >
+                    {actionInProgress === 'createDefaultTeams' ? 'CREATING...' : 'ADD 28 TEAMS'}
+                  </button>
+                </div>
+              </div>
               <form onSubmit={handleCreateTeam} className="flex flex-col gap-5 relative z-10">
                 <div className="flex flex-col gap-1">
                   <label className="heist-font text-heist-teal tracking-widest text-lg">PROFILE NAME</label>
@@ -531,7 +561,17 @@ const AdminScreen = () => {
                       <div className="flex items-center gap-1 bg-[#111] p-1 border border-gray-800">
                         <button onClick={() => updateTokens(t.id, 1, 'Admin')} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-heist-yellow hover:bg-gray-800 transition-colors">+</button>
                         <button onClick={() => updateTokens(t.id, -1, 'Admin')} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-heist-red hover:bg-gray-800 transition-colors">-</button>
-                        <button onClick={() => deleteTeam(t.id)} className="w-8 h-8 flex items-center justify-center text-heist-red hover:bg-heist-red hover:text-white transition-colors ml-1"><X size={16} /></button>
+                        <button
+                          onClick={() => setConfirmConfig({
+                            title: 'DELETE PROFILE',
+                            message: `Delete ${t.name}? This removes the team profile and its login access.`,
+                            type: 'danger',
+                            onConfirm: () => safeAction('deleteTeam', () => deleteTeam(t.id)),
+                          })}
+                          className="w-8 h-8 flex items-center justify-center text-heist-red hover:bg-heist-red hover:text-white transition-colors ml-1"
+                        >
+                          <X size={16} />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -631,7 +671,7 @@ const AdminScreen = () => {
                         {roundStartedAt && (
                           <div className="flex items-center gap-2">
                             <Clock className="text-gray-400" size={16} />
-                            <MatchTimer startTime={roundStartedAt} />
+                            <MatchTimer startTime={roundStartedAt} isPaused={gameState.isPaused} pausedAt={gameState.pausedAt} />
                           </div>
                         )}
                       </div>
@@ -675,7 +715,7 @@ const AdminScreen = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <Clock className="text-gray-400" size={16} />
-                          <MatchTimer startTime={m.startTime} />
+                          <MatchTimer startTime={m.startTime} isPaused={gameState.isPaused} pausedAt={gameState.pausedAt} />
                         </div>
                       </div>
 
@@ -860,7 +900,7 @@ const AdminScreen = () => {
                         {roundStartedAt && (
                           <div className="flex items-center justify-center gap-3 mt-4">
                             <span className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest">ROUND TIMER</span>
-                            <MatchTimer startTime={roundStartedAt} />
+                            <MatchTimer startTime={roundStartedAt} isPaused={gameState.isPaused} pausedAt={gameState.pausedAt} />
                           </div>
                         )}
                         <div className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest mt-4">
@@ -1030,7 +1070,8 @@ const AdminScreen = () => {
               <div className="flex flex-col gap-4 relative z-10">
                 <div className="heist-mono text-sm text-gray-300 bg-black bg-opacity-80 p-4 border-l-2 border-heist-yellow">
                   Override default 0-token elimination timeout.<br /><br />
-                  CURRENT: <span className="text-heist-yellow">{gameState.timeoutDurationOverride ? (gameState.timeoutDurationOverride / 60000) + ' MIN' : 'DYNAMIC'}</span>
+                  CURRENT: <span className="text-heist-yellow">{gameState.timeoutDurationOverride ? (gameState.timeoutDurationOverride / 60000) + ' MIN' : 'DYNAMIC'}</span><br />
+                  RESET PASSWORD: <span className="text-heist-yellow">{DEFAULT_TEAM_PASSWORD}</span>
                 </div>
                 <div className="flex gap-2 mt-2">
                   <input className="input-heist" type="number" value={timeoutInput} onChange={e => setTimeoutInput(e.target.value)} placeholder="MINUTES" />
@@ -1073,10 +1114,10 @@ const AdminScreen = () => {
           </div>
         </div>
         <div className="panel-container border-t-2 border-heist-yellow p-3 flex flex-col items-center justify-center gap-1">
-          <span className="heist-mono text-[10px] text-gray-400 tracking-widest uppercase">PHASE</span>
+          <span className="heist-mono text-[10px] text-gray-400 tracking-widest uppercase">MODE</span>
           <div className="flex items-center gap-2">
             <Crown className="text-heist-yellow" size={24} />
-            <span className="heist-font text-3xl md:text-4xl text-heist-yellow">{gameState.phase === 'phase2' ? '2' : '1'}</span>
+            <span className="heist-font text-3xl md:text-4xl text-heist-yellow">{gameState.phase === 'phase2' ? 'WAGER' : 'P1'}</span>
           </div>
         </div>
       </div>
