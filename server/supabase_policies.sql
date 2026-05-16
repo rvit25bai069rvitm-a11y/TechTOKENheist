@@ -110,6 +110,44 @@ alter table public.matchmaking_queue add column if not exists team_tokens intege
 alter table public.matchmaking_queue add column if not exists matched_with uuid;
 alter table public.matchmaking_queue add column if not exists created_at timestamptz not null default now();
 
+with ranked_matchmaking_queue as (
+  select
+    id,
+    row_number() over (
+      partition by team_id
+      order by (matched_with is not null) desc, created_at desc, id desc
+    ) as duplicate_rank
+  from public.matchmaking_queue
+  where team_id is not null
+)
+delete from public.matchmaking_queue queue
+using ranked_matchmaking_queue ranked
+where queue.id = ranked.id
+  and ranked.duplicate_rank > 1;
+
+do $$
+declare
+  team_id_attnum smallint;
+begin
+  select attribute.attnum
+  into team_id_attnum
+  from pg_attribute attribute
+  where attribute.attrelid = 'public.matchmaking_queue'::regclass
+    and attribute.attname = 'team_id'
+    and not attribute.attisdropped;
+
+  if not exists (
+    select 1
+    from pg_constraint constraint_row
+    where constraint_row.conrelid = 'public.matchmaking_queue'::regclass
+      and constraint_row.contype in ('u', 'p')
+      and constraint_row.conkey = array[team_id_attnum]::smallint[]
+  ) then
+    alter table public.matchmaking_queue
+      add constraint matchmaking_queue_team_id_key unique (team_id);
+  end if;
+end $$;
+
 alter table public.active_matches add column if not exists team_a uuid;
 alter table public.active_matches add column if not exists team_b uuid;
 alter table public.active_matches add column if not exists domain text;

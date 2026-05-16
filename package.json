@@ -9,7 +9,7 @@
     "postbuild": "node scripts/prune-dist-public.js && node scripts/verify-dist-artifacts.js && node scripts/verify-static-routes.js",
     "lint": "eslint .",
     "preview": "vite preview",
-    "verify": "node --test src/utils/publicStateSnapshot.test.js src/utils/supabasePublicStateContract.test.js src/utils/edgeFunctionRuntime.test.js src/utils/matchmaking.test.js src/utils/matchmakingDisplay.test.js src/utils/deployAssets.test.js && npm run lint && npm run build",
+    "verify": "node --test src/utils/publicStateSnapshot.test.js src/utils/supabasePublicStateContract.test.js src/utils/edgeFunctionRuntime.test.js src/utils/matchmaking.test.js src/utils/matchmakingDisplay.test.js src/utils/supabaseSchemaRepair.test.js src/utils/deployAssets.test.js && npm run lint && npm run build",
     "verify:install": "npm ci --dry-run",
     "verify:dist": "node scripts/verify-dist-artifacts.js",
     "verify:static-routes": "node scripts/verify-static-routes.js",
