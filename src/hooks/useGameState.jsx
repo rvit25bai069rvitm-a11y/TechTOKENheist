@@ -161,6 +161,11 @@ const useGameStateStore = create(
                   console.error('Original Error:', error);
                   console.groupEnd();
 
+                  // Auto-logout on invalid session token
+                  if (errorMessage === 'Invalid session token' || error.status === 401) {
+                    get().logout();
+                  }
+
                   // Check if it's a retryable error (network, 5xx)
                   const isRetryable = error.message?.includes('Failed to fetch') ||
                     error.message?.includes('NetworkError') ||
@@ -177,6 +182,9 @@ const useGameStateStore = create(
 
                 if (data && !data.success) {
                   console.error(`[ADMIN ACTION FAILED] ${act}:`, data.error)
+                  if (data.error === 'Invalid session token') {
+                    get().logout();
+                  }
                   return { success: false, error: data.error }
                 }
 
@@ -221,14 +229,6 @@ const useGameStateStore = create(
         return executeInvoke(action, payload)
       },
       login: async (username, password) => {
-        const u = username.trim();
-        // Hardcoded admin override
-        if (u === 'proffesor' && password === 'iamadmin') {
-          console.log('[AUTH] Hardcoded admin access granted');
-          set({ user: { role: 'admin', teamId: null, teamName: null, token: 'hc-admin' } });
-          return { success: true, role: 'admin' };
-        }
-
         const res = await get()._invoke('login', { username, password });
         if (!res.success) return res;
 
