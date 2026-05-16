@@ -20,7 +20,11 @@ test('edge game actions do not read sysCheck before it is initialized', () => {
 
   const createTeamBlock = getCaseBlock(edgeFunction, "case 'createTeam':", "case 'editTeam':")
   assert.doesNotMatch(createTeamBlock, /phase:\s*sysCheck\?\./)
-  assert.match(createTeamBlock, /phase:\s*system\?\.phase \|\| 'phase1'/)
+  const createTeamQueueInsert = createTeamBlock.match(/from\('matchmaking_queue'\)[\s\S]*?insert\(\[\s*\{[\s\S]*?\}\s*,?\s*\]\)/)?.[0] || ''
+  assert.match(createTeamQueueInsert, /team_id:\s*teamId/)
+  assert.match(createTeamQueueInsert, /team_name:\s*name/)
+  assert.match(createTeamQueueInsert, /team_tokens:\s*payloadData\.tokens \?\? 1/)
+  assert.doesNotMatch(createTeamQueueInsert, /\bphase\s*:/)
 
   const declareWinnerBlock = getCaseBlock(edgeFunction, "case 'declareWinner':", "case 'spinDomain':")
   assert.doesNotMatch(declareWinnerBlock, /phase:\s*sysCheck\?\./)

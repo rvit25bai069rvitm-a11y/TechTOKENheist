@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useGameState } from '../hooks/useGameState';
 import { Lock, Swords } from 'lucide-react';
 import './FinaleOverlay.css';
@@ -76,23 +76,21 @@ const RoundTracker = ({ finaleResults, currentRound }) => {
   );
 };
 
-const FinaleRoundTimer = ({ startTime, isPaused = false, pausedAt = null, className = '' }) => {
+const FinaleRoundTimer = ({ startTime, className = '' }) => {
   const [display, setDisplay] = useState('0:00');
 
   useEffect(() => {
     if (!startTime) return;
     const tick = () => {
-      const effectiveNow = isPaused && pausedAt ? pausedAt : Date.now();
-      const ms = Math.max(0, effectiveNow - startTime);
+      const ms = Date.now() - startTime;
       const mins = Math.floor(ms / 60000);
       const secs = Math.floor((ms % 60000) / 1000);
       setDisplay(`${mins}:${String(secs).padStart(2, '0')}`);
     };
     tick();
-    if (isPaused) return undefined;
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [startTime, isPaused, pausedAt]);
+  }, [startTime]);
 
   if (!startTime) return null;
   return <span className={`finale-timer-value ${className}`}>{display}</span>;
@@ -102,7 +100,7 @@ const FinaleRoundTimer = ({ startTime, isPaused = false, pausedAt = null, classN
 const FinaleOverlay = () => {
   const { gameState, user, myTeam } = useGameState();
   const [shaking, setShaking] = useState(false);
-  const [prevRound, setPrevRound] = useState(-1);
+  const prevRoundRef = useRef(-1);
 
   const finaleState = gameState.finaleState;
   const {
@@ -128,15 +126,21 @@ const FinaleOverlay = () => {
 
   // Screen shake on round change
   useEffect(() => {
-    if (!finaleState?.isFinaleActive || user?.role === 'admin') return undefined;
-    if (currentRound !== prevRound && currentRound > 0) {
-      setShaking(true);
-      const timeoutId = setTimeout(() => setShaking(false), 500);
-      setPrevRound(currentRound);
-      return () => clearTimeout(timeoutId);
+    if (!finaleState?.isFinaleActive || user?.role === 'admin') {
+      prevRoundRef.current = -1;
+      return undefined;
+    }
+    if (currentRound !== prevRoundRef.current && currentRound > 0) {
+      prevRoundRef.current = currentRound;
+      const startTimeoutId = setTimeout(() => setShaking(true), 0);
+      const stopTimeoutId = setTimeout(() => setShaking(false), 500);
+      return () => {
+        clearTimeout(startTimeoutId);
+        clearTimeout(stopTimeoutId);
+      };
     }
     return undefined;
-  }, [currentRound, finaleState?.isFinaleActive, prevRound, user?.role]);
+  }, [currentRound, finaleState?.isFinaleActive, user?.role]);
 
   // Don't show if no finale active or admin view
   if (!finaleState || !finaleState.isFinaleActive || user?.role === 'admin') return null;
@@ -240,7 +244,7 @@ const FinaleOverlay = () => {
             {roundStartedAt && (
               <div className="finale-domain-timer">
                 <span className="finale-domain-timer-label">ROUND TIMER</span>
-                <FinaleRoundTimer startTime={roundStartedAt} isPaused={gameState.isPaused} pausedAt={gameState.pausedAt} className="finale-domain-timer-value" />
+                <FinaleRoundTimer startTime={roundStartedAt} className="finale-domain-timer-value" />
               </div>
             )}
           </div>
@@ -280,7 +284,7 @@ const FinaleOverlay = () => {
           {roundStartedAt && (
             <div className="finale-info-item">
               <span className="finale-info-label">TIMER</span>
-              <FinaleRoundTimer startTime={roundStartedAt} isPaused={gameState.isPaused} pausedAt={gameState.pausedAt} className="finale-info-value" />
+              <FinaleRoundTimer startTime={roundStartedAt} className="finale-info-value" />
             </div>
           )}
         </div>

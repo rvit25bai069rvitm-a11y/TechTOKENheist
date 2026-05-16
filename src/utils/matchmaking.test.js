@@ -111,7 +111,7 @@ test('runMatchmaking prioritizes largest token gaps in phase 2', () => {
   ])
 })
 
-test('phase 2 ignores phase 1 opponent and allocation caps but keeps consecutive domain block', () => {
+test('phase 2 still enforces opponent and domain allocation safety', () => {
   const teams = [
     { id: 'alpha', name: 'Alpha', tokens: 1, status: 'idle' },
     { id: 'bravo', name: 'Bravo', tokens: 10, status: 'idle' },
@@ -138,15 +138,19 @@ test('phase 2 ignores phase 1 opponent and allocation caps but keeps consecutive
 
   assert.deepEqual(
     getQueueBlockReasons({ gameState, teamA: teams[0], teamB: teams[1], matchConstraints }),
-    []
+    [
+      'Already faced each other 2 times (max reached)',
+      'Cannot face the same opponent in consecutive matches',
+      'No valid domains available for this pair',
+    ]
   )
   assert.deepEqual(
     getValidDomains({ teamA: teams[0], teamB: teams[1], matchConstraints, allDomains: gameState.domains, phase: 'phase2' }),
-    ['Tech Quiz']
+    []
   )
   assert.deepEqual(
     runMatchmaking({ gameState, teams, matchConstraints, existingMatches: [] }),
-    [{ teamAId: 'alpha', teamAName: 'Alpha', teamBId: 'bravo', teamBName: 'Bravo' }]
+    []
   )
 })
 

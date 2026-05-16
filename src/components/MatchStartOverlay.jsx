@@ -140,19 +140,27 @@ const MatchStartOverlay = () => {
       }
     } else if (!gameState.isGameActive) {
       // Reset if game is stopped so it can play again next time
-      setIsFinished(false);
-      setActive(false);
-      setIsTearing(false);
-      setShowAnnouncement(true);
-      setShowSubtitles(false);
-      setPhase(0);
       startedAtRef.current = null;
       audioPlayedRef.current = false;
       flashPlayedRef.current = false;
       timerPulseRef.current = false;
-      setTimerPulse(false);
       if (timerRef.current) cancelAnimationFrame(timerRef.current);
       clearPendingTimeouts();
+      const resetTimeoutId = setTimeout(() => {
+        setIsFinished(false);
+        setActive(false);
+        setIsTearing(false);
+        setShowAnnouncement(true);
+        setShowSubtitles(false);
+        setPhase(0);
+        setTimerPulse(false);
+      }, 0);
+
+      return () => {
+        clearTimeout(resetTimeoutId);
+        if (timerRef.current) cancelAnimationFrame(timerRef.current);
+        clearPendingTimeouts();
+      };
     }
 
     return () => {

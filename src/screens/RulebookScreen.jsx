@@ -119,7 +119,7 @@ const RulebookScreen = () => {
       </motion.div>
 
       <motion.div variants={itemVariants}>
-        <CollapsibleSection title="WAGER MODE" icon={<Zap size={24} className="animate-pulse" />} accentColor="var(--heist-red)" defaultOpen={true}>
+        <CollapsibleSection title="PHASE 2 — WAGER MODE" icon={<Zap size={24} className="animate-pulse" />} accentColor="var(--heist-red)" defaultOpen={true}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {rulebookPhase2.map(s => (
               <div key={s.key} className="heist-card border-red-900/30 bg-red-950/10 p-8 hover:border-red-600 transition-all group">

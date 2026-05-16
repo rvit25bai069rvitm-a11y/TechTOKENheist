@@ -64,13 +64,13 @@ export const rulebookAdminDuties = [
   'Start/pause/reset the game',
   'Confirm matched pairs and spin domain wheel',
   'Declare match winners',
-  'Toggle Phase 1 <-> Wager Mode'
+  'Toggle Phase 1 ↔ Phase 2'
 ];
 
 export const rulebookImportantNotes = [
   'New rules can be introduced depending on the situation',
   'Volunteers or heads have the final say on all matters',
-  'Wager Mode has drastically different token rules'
+  'Phase 2 (Wager Mode) has drastically different token rules'
 ];
 
 export const rulebookPhase2 = [
@@ -110,7 +110,7 @@ export const rulebookGameplayNotes = [
   {
     key: 'elimination',
     title: 'Elimination',
-    body: 'In Wager Mode, reaching 0 tokens means permanent elimination. No timeout, no reset.'
+    body: 'In Phase 2 (Wager Mode), reaching 0 tokens means permanent elimination. No timeout, no reset.'
   },
   {
     key: 'fair-play',

@@ -121,11 +121,11 @@ export function getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints
     reasons.push(`Token gap too high: ${teamA.tokens} vs ${teamB.tokens} (diff ${tokenDiff}, max 3)`)
   }
 
-  if (!isPhase2 && (cA.opponents?.[teamB.id] || 0) >= 2) {
+  if ((cA.opponents?.[teamB.id] || 0) >= 2) {
     reasons.push('Already faced each other 2 times (max reached)')
   }
 
-  if (!isPhase2 && (cA.lastOpponent === teamB.id || cB.lastOpponent === teamA.id)) {
+  if (cA.lastOpponent === teamB.id || cB.lastOpponent === teamA.id) {
     reasons.push('Cannot face the same opponent in consecutive matches')
   }
 
@@ -134,7 +134,6 @@ export function getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints
     teamB,
     matchConstraints,
     allDomains: gameState?.domains,
-    phase: gameState?.phase,
   })
   if (validDomains.length === 0) {
     reasons.push('No valid domains available for this pair')
@@ -145,25 +144,22 @@ export function getQueueBlockReasons({ gameState, teamA, teamB, matchConstraints
 
 /**
  * Get valid domains for a match between two teams.
- * Phase 2 ignores phase-1 allocation caps but keeps consecutive-domain safety.
+ * Applies domain allocation and repeat-domain safety in both phases.
  */
-export function getValidDomains({ teamA, teamB, matchConstraints, allDomains, phase }) {
+export function getValidDomains({ teamA, teamB, matchConstraints, allDomains }) {
   const domains = sanitizeConfiguredDomains(allDomains)
   const c = matchConstraints || {}
   const cA = c[teamA?.id] || {}
   const cB = c[teamB?.id] || {}
-  const isPhase2 = phase === 'phase2'
 
   return domains.filter((domain) => {
-    if (!isPhase2) {
-      if ((cA.domains?.[domain] || 0) >= 2) return false
-      if ((cB.domains?.[domain] || 0) >= 2) return false
+    if ((cA.domains?.[domain] || 0) >= 2) return false
+    if ((cB.domains?.[domain] || 0) >= 2) return false
 
-      const comboKeyA = `${teamB?.id}::${domain}`
-      const comboKeyB = `${teamA?.id}::${domain}`
-      if ((cA.combos?.[comboKeyA] || 0) >= 1) return false
-      if ((cB.combos?.[comboKeyB] || 0) >= 1) return false
-    }
+    const comboKeyA = `${teamB?.id}::${domain}`
+    const comboKeyB = `${teamA?.id}::${domain}`
+    if ((cA.combos?.[comboKeyA] || 0) >= 1) return false
+    if ((cB.combos?.[comboKeyB] || 0) >= 1) return false
 
     if (cA.lastDomain === domain) return false
     if (cB.lastDomain === domain) return false
