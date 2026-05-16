@@ -148,6 +148,17 @@ const AdminScreen = () => {
   };
 
   const [confirmConfig, setConfirmConfig] = useState(null);
+  const [pendingDomainConfirm, setPendingDomainConfirm] = useState(null);
+
+  const handleDeleteTeam = (team) => {
+    if (!team?.id) return;
+    setConfirmConfig({
+      title: 'DELETE PROFILE',
+      message: `Remove ${team.name || 'this profile'} from the recruit list? This cannot be undone.`,
+      type: 'danger',
+      onConfirm: () => safeAction(`deleteTeam:${team.id}`, () => deleteTeam(team.id)),
+    });
+  };
 
   const handleCreateTeam = (e) => {
     e.preventDefault();
@@ -180,6 +191,25 @@ const AdminScreen = () => {
     return result;
   };
 
+  const handleQueueDomainSpin = (pair, domain) => {
+    if (!pair || !domain) return;
+    setPendingDomainConfirm({ pair, domain });
+  };
+
+  const handleContinueToVaults = () => {
+    const pair = pendingDomainConfirm?.pair;
+    const domain = pendingDomainConfirm?.domain;
+    if (!pair || !domain) return;
+
+    safeAction(`createMatch:${pair.teamAId}:${pair.teamBId}`, async () => {
+      const result = await createMatch(pair.teamAId, pair.teamBId, domain);
+      if (!result || result.success !== false) {
+        setPendingDomainConfirm(null);
+      }
+      return result;
+    });
+  };
+
   const handleDeclareWinner = (match, winningTeam) => {
     if (!match?.id || !winningTeam?.id) return;
     if (!window.confirm(`Confirm winner declaration for ${winningTeam.name}?`)) return;
@@ -203,6 +233,17 @@ const AdminScreen = () => {
     () => buildQueueDiagnostics({ gameState, teams, matchmakingQueue, matchConstraints, activeMatches }),
     [activeMatches, gameState, teams, matchmakingQueue, matchConstraints]
   );
+
+  useEffect(() => {
+    if (!pendingDomainConfirm?.pair) return undefined;
+    const stillReady = queuePairs.some(
+      (pair) => pair.teamAId === pendingDomainConfirm.pair.teamAId && pair.teamBId === pendingDomainConfirm.pair.teamBId
+    );
+    if (stillReady) return undefined;
+
+    const timeoutId = setTimeout(() => setPendingDomainConfirm(null), 0);
+    return () => clearTimeout(timeoutId);
+  }, [pendingDomainConfirm, queuePairs]);
 
   const tabs = [
     { id: 'teams', label: 'TEAMS', icon: <Users size={20} /> },
@@ -552,7 +593,7 @@ const AdminScreen = () => {
                       <div className="flex items-center gap-1 bg-[#111] p-1 border border-gray-800">
                         <button onClick={() => updateTokens(t.id, 1, 'Admin')} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-heist-yellow hover:bg-gray-800 transition-colors">+</button>
                         <button onClick={() => updateTokens(t.id, -1, 'Admin')} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-heist-red hover:bg-gray-800 transition-colors">-</button>
-                        <button onClick={() => deleteTeam(t.id)} className="w-8 h-8 flex items-center justify-center text-heist-red hover:bg-heist-red hover:text-white transition-colors ml-1"><X size={16} /></button>
+                        <button onClick={() => handleDeleteTeam(t)} className="w-8 h-8 flex items-center justify-center text-heist-red hover:bg-heist-red hover:text-white transition-colors ml-1"><X size={16} /></button>
                       </div>
                     </div>
                   </div>
@@ -576,18 +617,62 @@ const AdminScreen = () => {
               <div className="flex flex-col gap-4">
                 <h4 className="heist-font text-heist-yellow text-2xl tracking-wider border-b border-gray-700 pb-2">READY TO EXECUTE</h4>
                 {queuePairs.length === 0 && <div className="heist-mono text-gray-500">No ready pairs currently.</div>}
-                {queuePairs.map((pair, i) => (
-                  <div key={i} className="border border-heist-yellow bg-black bg-opacity-80 p-4">
-                    <div className="heist-font text-2xl text-center mb-4 flex items-center justify-center gap-4">
-                      <span className="text-white">{pair.teamAName}</span>
-                      <span className="text-heist-red">VS</span>
-                      <span className="text-white">{pair.teamBName}</span>
+                {queuePairs.map((pair, i) => {
+                  const isPendingForPair =
+                    pendingDomainConfirm?.pair?.teamAId === pair.teamAId &&
+                    pendingDomainConfirm?.pair?.teamBId === pair.teamBId;
+                  const createActionName = `createMatch:${pair.teamAId}:${pair.teamBId}`;
+
+                  return (
+                    <div key={i} className="border border-heist-yellow bg-black bg-opacity-80 p-4">
+                      <div className="heist-font text-2xl text-center mb-4 flex items-center justify-center gap-4">
+                        <span className="text-white">{pair.teamAName}</span>
+                        <span className="text-heist-red">VS</span>
+                        <span className="text-white">{pair.teamBName}</span>
+                      </div>
+                      <div className="flex justify-center border-t border-gray-800 pt-4">
+                        <DomainWheel
+                          domains={domains}
+                          disabled={Boolean(pendingDomainConfirm) || actionInProgress === createActionName}
+                          onSpin={(domain) => handleQueueDomainSpin(pair, domain)}
+                        />
+                      </div>
+
+                      {isPendingForPair && (
+                        <div className="mt-4 border-t border-heist-yellow/50 pt-4 flex flex-col sm:flex-row sm:items-end gap-3">
+                          <div className="flex-1 min-w-0">
+                            <label className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest block mb-2">
+                              Confirm Domain
+                            </label>
+                            <select
+                              className="input-heist w-full"
+                              value={pendingDomainConfirm.domain}
+                              onChange={(e) => setPendingDomainConfirm((current) => ({ ...current, domain: e.target.value }))}
+                            >
+                              {domains.map((domain) => (
+                                <option key={domain} value={domain}>{domain}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <button
+                            className="bg-heist-yellow text-black px-4 py-3 heist-font tracking-widest hover:bg-yellow-300 disabled:opacity-50 disabled:cursor-wait transition-colors"
+                            onClick={handleContinueToVaults}
+                            disabled={!!actionInProgress}
+                          >
+                            {actionInProgress === createActionName ? 'SENDING...' : 'CONTINUE TO VAULTS'}
+                          </button>
+                          <button
+                            className="border border-gray-700 text-gray-400 px-4 py-3 heist-font tracking-widest hover:border-white hover:text-white disabled:opacity-50 transition-colors"
+                            onClick={() => setPendingDomainConfirm(null)}
+                            disabled={!!actionInProgress}
+                          >
+                            CANCEL
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex justify-center border-t border-gray-800 pt-4">
-                      <DomainWheel domains={domains} onSpin={(domain) => createMatch(pair.teamAId, pair.teamBId, domain)} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Waiting Queue */}

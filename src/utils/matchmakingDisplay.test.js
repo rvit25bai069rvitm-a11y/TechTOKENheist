@@ -40,3 +40,26 @@ test('admin force assignment button invokes automatching', () => {
   assert.match(adminScreen, /onClick=\{\(\) => safeAction\('autoMatchPairs', autoMatchPairs\)\}/)
   assert.doesNotMatch(adminScreen, /onClick=\{enrollAllEligible\}/)
 })
+
+test('admin confirms wheel-selected domain before creating a match', () => {
+  const adminScreen = readProjectFile('src/screens/AdminScreen.jsx')
+
+  assert.match(adminScreen, /pendingDomainConfirm/)
+  assert.match(adminScreen, /const handleQueueDomainSpin = \(pair, domain\) =>/)
+  assert.match(adminScreen, /setPendingDomainConfirm\(\{\s*pair,\s*domain\s*\}\)/)
+  assert.match(adminScreen, /value=\{pendingDomainConfirm\.domain\}/)
+  assert.match(adminScreen, /onChange=\{\(e\) => setPendingDomainConfirm\(\(current\) => \(\{\s*\.\.\.current,\s*domain: e\.target\.value\s*\}\)\)\}/)
+  assert.match(adminScreen, /CONTINUE TO VAULTS/)
+  assert.match(adminScreen, /safeAction\(`createMatch:\$\{pair\.teamAId\}:\$\{pair\.teamBId\}`, async \(\) => \{[\s\S]*createMatch\(pair\.teamAId, pair\.teamBId, domain\)/)
+  assert.doesNotMatch(adminScreen, /onSpin=\{\(domain\) => createMatch\(pair\.teamAId, pair\.teamBId, domain\)\}/)
+})
+
+test('admin delete team action uses confirmation modal', () => {
+  const adminScreen = readProjectFile('src/screens/AdminScreen.jsx')
+
+  assert.match(adminScreen, /const handleDeleteTeam = \(team\) =>/)
+  assert.match(adminScreen, /title: 'DELETE PROFILE'/)
+  assert.match(adminScreen, /onConfirm: \(\) => safeAction\(`deleteTeam:\$\{team\.id\}`, \(\) => deleteTeam\(team\.id\)\)/)
+  assert.match(adminScreen, /onClick=\{\(\) => handleDeleteTeam\(t\)\}/)
+  assert.doesNotMatch(adminScreen, /onClick=\{\(\) => deleteTeam\(t\.id\)\}/)
+})

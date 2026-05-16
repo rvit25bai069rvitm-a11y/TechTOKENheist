@@ -750,6 +750,8 @@ const runAdminWorkflow = async ({ browser, baseUrl }) => {
   await page.getByRole('button', { name: /PLANS/i }).click()
   await waitForText(page, 'READY TO EXECUTE', diagnostics)
   await page.getByRole('button', { name: /SPIN WHEEL/i }).first().click()
+  await page.getByRole('button', { name: /CONTINUE TO VAULTS/i }).waitFor({ timeout: 10000 })
+  await page.getByRole('button', { name: /CONTINUE TO VAULTS/i }).click()
   await waitForState(() => state.active_matches.length === 1, 'Expected domain wheel to create one active match', state)
   await waitForText(page, 'ACTIVE MISSIONS', diagnostics)
 
