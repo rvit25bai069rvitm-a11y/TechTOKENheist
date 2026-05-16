@@ -8,13 +8,13 @@ const CollapsibleSection = ({ title, icon, children, defaultOpen = false, accent
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="heist-card mb-6 group">
-      <button 
-        onClick={() => setOpen(!open)} 
+      <button
+        onClick={() => setOpen(!open)}
         className={`flex justify-between items-center w-full p-6 bg-transparent border-none cursor-pointer text-white hover:bg-white/5 transition-all ${open ? 'bg-white/2' : ''}`}
       >
         <div className="flex items-center gap-6">
           <div className="p-3 bg-white/5 border border-white/5 rounded-sm group-hover:border-red-600/30 transition-colors" style={{ color: accentColor }}>
-             {icon}
+            {icon}
           </div>
           <span className="heist-font text-3xl tracking-[0.2em] uppercase m-0 leading-none mt-1 group-hover:text-red-500 transition-colors">{title}</span>
         </div>
@@ -24,20 +24,20 @@ const CollapsibleSection = ({ title, icon, children, defaultOpen = false, accent
       </button>
       <AnimatePresence>
         {open && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }} 
-            animate={{ height: 'auto', opacity: 1 }} 
-            exit={{ height: 0, opacity: 0 }} 
-            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }} 
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
           >
-             <div className="p-8 bg-black/40 border-t border-white/5 relative">
-                <div className="scanline-overlay opacity-5"></div>
-                <div className="blueprint-grid absolute inset-0 opacity-5"></div>
-                <div className="relative z-10">
-                  {children}
-                </div>
-             </div>
+            <div className="p-8 bg-black/40 border-t border-white/5 relative">
+              <div className="scanline-overlay opacity-5"></div>
+              <div className="blueprint-grid absolute inset-0 opacity-5"></div>
+              <div className="relative z-10">
+                {children}
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -48,13 +48,14 @@ const CollapsibleSection = ({ title, icon, children, defaultOpen = false, accent
 const RulebookScreen = () => {
   const { gameState } = useGameState();
   const domains = gameState?.domains || rulebookDomains;
+  const phase2Unlocked = gameState?.phase === 'phase2';
 
   const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } };
 
   return (
     <motion.div className="flex flex-col gap-2 relative text-white h-full pb-20" variants={containerVariants} initial="hidden" animate="visible">
-      
+
       {/* Tactical Header */}
       <motion.div variants={itemVariants} className="heist-header-tactical mb-12">
         <div>
@@ -118,18 +119,20 @@ const RulebookScreen = () => {
         </CollapsibleSection>
       </motion.div>
 
-      <motion.div variants={itemVariants}>
-        <CollapsibleSection title="PHASE 2 — WAGER MODE" icon={<Zap size={24} className="animate-pulse" />} accentColor="var(--heist-red)" defaultOpen={true}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {rulebookPhase2.map(s => (
-              <div key={s.key} className="heist-card border-red-900/30 bg-red-950/10 p-8 hover:border-red-600 transition-all group">
-                <h3 className="heist-font text-red-500 text-4xl tracking-widest mb-4 uppercase">{s.title}</h3>
-                <p className="heist-mono text-gray-300 text-xs leading-loose tracking-widest uppercase">{s.body}</p>
-              </div>
-            ))}
-          </div>
-        </CollapsibleSection>
-      </motion.div>
+      {phase2Unlocked && (
+        <motion.div variants={itemVariants}>
+          <CollapsibleSection title="WAGER MODE" icon={<Zap size={24} className="animate-pulse" />} accentColor="var(--heist-red)" defaultOpen={true}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {rulebookPhase2.map(s => (
+                <div key={s.key} className="heist-card border-red-900/30 bg-red-950/10 p-8 hover:border-red-600 transition-all group">
+                  <h3 className="heist-font text-red-500 text-4xl tracking-widest mb-4 uppercase">{s.title}</h3>
+                  <p className="heist-mono text-gray-300 text-xs leading-loose tracking-widest uppercase">{s.body}</p>
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+        </motion.div>
+      )}
 
       <motion.div variants={itemVariants}>
         <CollapsibleSection title="THE PROFESSOR'S DUTIES" icon={<VenetianMask size={24} />} accentColor="#999">
@@ -161,7 +164,7 @@ const RulebookScreen = () => {
         <CollapsibleSection title="CRITICAL DIRECTIVES" icon={<ShieldAlert size={24} />} accentColor="#EAB308">
           <div className="bg-yellow-950/10 border border-yellow-900/30 p-8">
             <ul className="flex flex-col gap-6 m-0 p-0 list-none">
-              {rulebookImportantNotes.map((n, i) => (
+              {rulebookImportantNotes.filter((n) => phase2Unlocked || !n.toLowerCase().includes('wager mode')).map((n, i) => (
                 <li key={i} className="flex gap-6 items-start">
                   <span className="text-yellow-600 font-bold heist-mono text-xl">!</span>
                   <p className="heist-mono text-yellow-600/80 text-xs tracking-widest uppercase leading-relaxed m-0">{n}</p>

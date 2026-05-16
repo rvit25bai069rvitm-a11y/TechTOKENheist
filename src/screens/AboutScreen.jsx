@@ -1,9 +1,10 @@
 import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 import rvitmImg from '../assets/rvitm.png';
-import rishiImg from '../../assets/rishi.png';
-import aneeshImg from '../../assets/aneesh.png';
-import biswaImg from '../../assets/biswa.png';
+import rishiImg from '../assets/rishi.png';
+import aneeshImg from '../assets/aneesh.png';
+import biswaImg from '../assets/biswa.png';
+import pratImg from '../assets/prat.png';
 import gdg from '../../assets/gdg.png';
 
 const offers = [
@@ -52,6 +53,12 @@ const organizers = [
         role: 'GDG Co-Organizer RVITM',
         photo: aneeshImg,
         linkedin: 'https://www.linkedin.com/in/aneesh-gupta-m-n-937792342/'
+    },
+    {
+        name: 'Pratyush Jaiswal',
+        role: 'GDG Co-Organizer RVITM',
+        photo: pratImg,
+        linkedin: 'https://www.linkedin.com/in/pratyush-jaiswal-ba0b6926a/'
     }
 ];
 

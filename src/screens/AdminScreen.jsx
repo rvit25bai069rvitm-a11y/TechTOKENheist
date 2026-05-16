@@ -116,7 +116,10 @@ const AdminScreen = () => {
     () => gameState.domains || ['Tech Pitch', 'Tech Quiz', 'Guess Output', 'Frontend Dev', 'Feature Addition'],
     [gameState.domains]
   );
-  const assignedProfiles = useMemo(() => new Set((teams || []).map((team) => team.name)), [teams]);
+  const assignedProfiles = useMemo(
+    () => new Set((teams || []).map((team) => String(team.name || '').trim().toLowerCase())),
+    [teams]
+  );
   const finaleDomains = useMemo(
     () => gameState.finaleState?.finaleDomains || [],
     [gameState.finaleState?.finaleDomains]
@@ -253,7 +256,7 @@ const AdminScreen = () => {
         <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
           <div className="flex items-center gap-2 border border-heist-teal px-4 py-2 bg-black bg-opacity-70 shadow-inner flex-1 justify-center md:flex-none">
             <span className="heist-font text-heist-teal tracking-widest text-lg md:text-xl">
-              {gameState.phase === 'phase2' ? 'PHASE 2 — WAGER' : 'PHASE 1 — INFILTRATION'}
+              {gameState.phase === 'phase2' ? 'WAGER MODE' : 'PHASE 1 — INFILTRATION'}
             </span>
             <Banknote className="text-heist-teal" size={20} />
           </div>
@@ -263,6 +266,7 @@ const AdminScreen = () => {
               title: 'ABORT MISSION',
               message: 'This will wipe all active matches and reset the operation. Are you sure?',
               type: 'danger',
+              verificationText: 'rvitmkimkc',
               onConfirm: () => safeAction('abortMission', resetGame)
             })}
             disabled={!!actionInProgress}
@@ -320,12 +324,16 @@ const AdminScreen = () => {
                 title: 'RESET PARAMETERS',
                 message: 'This will reset all team tokens and status. This action is irreversible!',
                 type: 'danger',
+                verificationText: 'rvitmkimkc',
                 onConfirm: () => safeAction('resetGame', resetGame)
               })}
               disabled={!!actionInProgress}
             >
               {actionInProgress === 'resetGame' ? 'RESETTING...' : 'RESET PARAMETERS'}
             </button>
+            <div className="absolute -bottom-5 left-0 heist-mono text-[9px] text-gray-600 uppercase tracking-widest">
+              RESET KEY: rvitmkimkc
+            </div>
             <button
               className={`border-2 border-orange-500 text-orange-500 px-6 py-1 heist-font text-lg hover:bg-orange-500 hover:text-black transition-colors animate-pulse ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
               onClick={() => setConfirmConfig({
@@ -365,7 +373,7 @@ const AdminScreen = () => {
           </div>
           <div className="flex flex-col">
             <div className="heist-font text-2xl tracking-wider text-white">
-              {gameState.phase === 'phase2' ? 'PHASE 2 — WAGER MODE' : 'PHASE 1 — INFILTRATION'}
+              {gameState.phase === 'phase2' ? 'WAGER MODE ACTIVATED' : 'PHASE 1 — INFILTRATION'}
             </div>
             <div className="heist-mono text-sm text-gray-400 mt-1">
               Queue match: Vault 13A infiltration. Stake: {gameState.phase === 'phase2' ? 'Winner takes all' : '+1/-1 TKN'}. Timeout: {gameState.timeoutDurationOverride ? gameState.timeoutDurationOverride / 60000 : 15} minutes.
@@ -382,14 +390,14 @@ const AdminScreen = () => {
         <button
           className={`bg-heist-teal text-black px-6 py-2 heist-font text-xl flex items-center justify-center gap-2 hover:bg-white transition-colors w-full md:w-auto flex-shrink-0 ${actionInProgress ? 'opacity-50 cursor-wait' : ''}`}
           onClick={() => setConfirmConfig({
-            title: gameState.phase === 'phase2' ? 'REVERT TO PHASE 1' : 'INITIATE PHASE 2',
+            title: gameState.phase === 'phase2' ? 'REVERT TO PHASE 1' : 'INITIATE WAGER MODE',
             message: gameState.phase === 'phase2' ? 'Switch back to standard match mode?' : 'Switch to WAGER mode? This will reset match history and enable high-stakes eliminations.',
             type: 'warning',
             onConfirm: () => safeAction('togglePhase', togglePhase)
           })}
           disabled={!!actionInProgress}
         >
-          {actionInProgress === 'togglePhase' ? 'SWITCHING...' : (gameState.phase === 'phase2' ? 'REVERT PHASE' : 'INITIATE PHASE 2')} <Bomb size={20} />
+          {actionInProgress === 'togglePhase' ? 'SWITCHING...' : (gameState.phase === 'phase2' ? 'REVERT PHASE' : 'INITIATE WAGER MODE')} <Bomb size={20} />
         </button>
       </div>
 
@@ -433,7 +441,7 @@ const AdminScreen = () => {
                           className={`border text-left p-2 transition-all ${isSelected ? 'border-heist-yellow bg-heist-yellow bg-opacity-10' : isAssigned ? 'border-heist-teal bg-black bg-opacity-70 hover:border-white' : 'border-gray-700 bg-black bg-opacity-50 hover:border-heist-teal'}`}
                         >
                           <div className="w-full aspect-square rounded-full overflow-hidden border border-gray-700 mb-2 bg-black">
-                            <img src={profile.src} alt={profile.label} className="w-full h-full object-cover" />
+                            <img src={profile.avatar} alt={profile.label} className="w-full h-full object-cover" />
                           </div>
                           <div className="heist-font text-sm tracking-widest text-white leading-none">{profile.label}</div>
                           <div className={`heist-mono text-[10px] uppercase mt-1 ${isAssigned ? 'text-heist-yellow' : 'text-gray-500'}`}>
@@ -517,7 +525,7 @@ const AdminScreen = () => {
                 )}
                 {teams.map(t => (
                   <div key={t.id} className="border border-gray-700 bg-black bg-opacity-80 p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 hover:border-gray-500 transition-colors">
-                    <div className="flex flex-col">
+                    <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-2">
                         <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-700 bg-black flex-shrink-0">
                           <img src={t.avatarSrc} alt={getProfileLabel(t.name)} className="w-full h-full object-cover" />
@@ -528,7 +536,10 @@ const AdminScreen = () => {
                         </span>
                         {t.status === 'timeout' && t.timeoutUntil && <TimeoutDisplay timeoutUntil={t.timeoutUntil} />}
                       </div>
-                      <span className="heist-mono text-xs text-gray-400 mt-1">L: {t.leader} | {t.memberNames?.filter(m => m !== t.leader).join(', ')}</span>
+                      <div className="heist-mono text-xs text-gray-400 mt-2 leading-relaxed break-words">
+                        <div><span className="text-gray-500 uppercase">Leader:</span> <span className="text-gray-300">{t.leader || 'Unassigned'}</span></div>
+                        <div><span className="text-gray-500 uppercase">Members:</span> <span className="text-gray-300">{(t.memberNames || []).length ? t.memberNames.join(', ') : 'No members listed'}</span></div>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto border-t border-gray-800 sm:border-0 pt-3 sm:pt-0">
                       <span className="heist-font text-heist-yellow text-2xl">{t.tokens} TKN</span>
@@ -1103,9 +1114,30 @@ const AdminScreen = () => {
               <h3 className="heist-font text-3xl tracking-widest text-white m-0 uppercase">{confirmConfig.title}</h3>
             </div>
             
-            <p className="heist-mono text-gray-300 text-sm mb-8 leading-relaxed">
+            <p className="heist-mono text-gray-300 text-sm mb-4 leading-relaxed">
               {confirmConfig.message}
             </p>
+
+            {confirmConfig.verificationText && (
+              <div className="mb-6">
+                <label className="heist-mono text-[10px] text-gray-500 uppercase tracking-widest mb-2 block">
+                  Safety Verification Required: Type <span className="text-heist-red font-bold select-all cursor-copy">{confirmConfig.verificationText}</span> to proceed.
+                </label>
+                <input
+                  type="text"
+                  className="input-heist w-full text-center tracking-widest font-bold"
+                  placeholder="ENTER VERIFICATION KEY"
+                  autoFocus
+                  onChange={(e) => {
+                    if (e.target.value === confirmConfig.verificationText) {
+                      setConfirmConfig(prev => ({ ...prev, _verified: true }));
+                    } else {
+                      setConfirmConfig(prev => ({ ...prev, _verified: false }));
+                    }
+                  }}
+                />
+              </div>
+            )}
             
             <div className="flex gap-4">
               <button 
@@ -1120,11 +1152,13 @@ const AdminScreen = () => {
                   confirmConfig.type === 'warning' ? 'bg-orange-500 hover:bg-orange-400' :
                   confirmConfig.type === 'success' ? 'bg-heist-yellow hover:bg-yellow-400' :
                   'bg-heist-teal hover:bg-teal-400'
-                }`}
+                } ${(confirmConfig.verificationText && !confirmConfig._verified) ? 'opacity-30 cursor-not-allowed' : ''}`}
                 onClick={() => {
+                  if (confirmConfig.verificationText && !confirmConfig._verified) return;
                   confirmConfig.onConfirm();
                   setConfirmConfig(null);
                 }}
+                disabled={confirmConfig.verificationText && !confirmConfig._verified}
               >
                 CONFIRM
               </button>
